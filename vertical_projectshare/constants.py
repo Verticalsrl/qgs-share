@@ -1,5 +1,6 @@
 # some constants for use across py files
 # some may disappear as soon as I find a clean way to get to metadata.txt (rn depends on physical folder name which MAY change for any reason)
+import datetime
 import os
 
 from qgis._core import QgsCoordinateReferenceSystem
@@ -13,6 +14,16 @@ PATH_ICONS = os.path.join(PATH_RESOURCES, "icons")
 def icon_path(name: str) -> str:
 	"""full filesystem path to a bundled svg icon (e.g. icon_path('history.svg'))"""
 	return os.path.join(PATH_ICONS, name)
+
+
+def to_local_time(dt: "datetime.datetime"):
+	"""QGIS stores last_modified_time in UTC: a naive value coming from the db is
+	interpreted as UTC and converted to the local timezone for display."""
+	if dt is None:
+		return None
+	if dt.tzinfo is None:
+		dt = dt.replace(tzinfo=datetime.timezone.utc)
+	return dt.astimezone()
 
 
 # for logging

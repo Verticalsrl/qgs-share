@@ -8,7 +8,7 @@ from qgis.PyQt import uic, QtWidgets
 from qgis._core import Qgis
 from qgis._gui import QgsMessageBar
 
-from .constants import STRFORMAT_DATETIME, STRFORMAT_DATE, STRFORMAT_TIME, icon_path
+from .constants import STRFORMAT_DATETIME, STRFORMAT_DATE, STRFORMAT_TIME, icon_path, to_local_time
 from .snapshooter import VerticalShareSnapper, HistoryDataItem
 
 DIALOG_PROJECT_HISTORY, _ = uic.loadUiType(os.path.join(
@@ -59,7 +59,7 @@ class ProjectHistoryDialog(QtWidgets.QDialog, DIALOG_PROJECT_HISTORY):
 
 			has_date = rowdata["changed_at"] is not None
 			if has_date:
-				datestr = rowdata["changed_at"].strftime(STRFORMAT_DATETIME)
+				datestr = to_local_time(rowdata["changed_at"]).strftime(STRFORMAT_DATETIME)
 				self.table_snapshots.setCellWidget(i, 2, QLabel(datestr))
 
 
@@ -97,7 +97,7 @@ class ProjectHistoryDialog(QtWidgets.QDialog, DIALOG_PROJECT_HISTORY):
 		if len(author.strip()) > 0:
 			fulldesc += " di " + author
 
-		changedate = change["changed_at"]
+		changedate = to_local_time(change["changed_at"])
 		if changedate is not None:
 			datestr = changedate.strftime(STRFORMAT_DATE)
 			timestr = changedate.strftime(STRFORMAT_TIME)

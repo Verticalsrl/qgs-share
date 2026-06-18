@@ -7,7 +7,7 @@ from PyQt5.QtWidgets import QToolBar, QWidget, QAction, QCheckBox, QLabel, QMenu
 from qgis._core import QgsApplication, QgsProject, Qgis
 from qgis._gui import QgisInterface, QgsGui, QgsMessageBar
 
-from .constants import PLUGIN_TITLE, PLUGIN_VERSION, icon_path
+from .constants import PLUGIN_TITLE, PLUGIN_VERSION, icon_path, to_local_time
 from .project_connector import DbProjectConnector
 from .dialog_project_history import ProjectHistoryDialog
 from .snapshooter import VerticalShareSnapper, ProjectUpdateState, SnapShooterListener
@@ -175,7 +175,7 @@ class PluginRunner (SnapShooterListener):
 
 	def desync_description (self, state: ProjectUpdateState):
 		author = state.get("last_author") or "un altro utente"
-		when = state["last_updated"].strftime("%H:%M") if state.get("last_updated") else "?"
+		when = to_local_time(state["last_updated"]).strftime("%H:%M") if state.get("last_updated") else "?"
 		return author, when
 
 	def show_out_of_sync (self, state: ProjectUpdateState):
