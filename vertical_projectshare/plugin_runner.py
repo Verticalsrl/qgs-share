@@ -122,7 +122,8 @@ class PluginRunner (SnapShooterListener):
 		self.button_notify.setFlat(True)
 		self.button_notify.clicked.connect(self.on_notify_clicked)
 		self.toolbar.addWidget(self.button_notify)
-		self.update_notify_ui()
+		# note: the bell state is initialised by setActiveStates() below, once
+		# flag_versioning_on exists
 
 		self.iface.addToolBar(self.toolbar)
 
