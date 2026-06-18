@@ -112,6 +112,17 @@ class PluginRunner (SnapShooterListener):
 		self.button_info.clicked.connect(self.open_info_dialog)
 		self.toolbar.addWidget(self.button_info)
 
+		# persistent "you are on a stale version" indicator: hidden while aligned,
+		# shown (and clickable to reload) while the db holds a newer version
+		self.button_desync = QPushButton()
+		self.button_desync.setObjectName("BUTTON_DESYNC")
+		self.button_desync.setIcon(QIcon(icon_path("desync.svg")))
+		self.button_desync.setFlat(True)
+		self.button_desync.setText(" versione superata")
+		self.button_desync.clicked.connect(self.reload_project_from_db)
+		self.button_desync.setVisible(False)
+		self.toolbar.addWidget(self.button_desync)
+
 		self.iface.addToolBar(self.toolbar)
 
 		self.flag_versioning_on = False
@@ -155,19 +166,42 @@ class PluginRunner (SnapShooterListener):
 
 	def on_state_update_check (self, ts: float, state: ProjectUpdateState):
 		# print ("received at ", ts, "state_local", self.latest_state, "state_db", state, "check", state == self.latest_state)
-		if (not self.flag_savesyncmode) and state != self.latest_state and self.desync_notified != state:
-			message = "È stata caricata una modifica da %s alle %s. " % (state["last_author"], state["last_updated"].strftime("%H:%M"))
+		if self.flag_savesyncmode or state is None:
+			return
+		if state != self.latest_state:
+			self.show_out_of_sync(state)
+		else:
+			self.clear_out_of_sync()
+
+	def desync_description (self, state: ProjectUpdateState):
+		author = state.get("last_author") or "un altro utente"
+		when = state["last_updated"].strftime("%H:%M") if state.get("last_updated") else "?"
+		return author, when
+
+	def show_out_of_sync (self, state: ProjectUpdateState):
+		"""persistent, idempotent indicator: stays visible until realignment,
+		while the message bar heads-up fires only once per distinct new version"""
+		author, when = self.desync_description(state)
+		self.button_desync.setToolTip(
+			"Stai lavorando su una versione superata (aggiornata da %s alle %s). Clicca per ricaricare dal db." % (author, when))
+		self.button_desync.setVisible(True)
+		# one-shot heads-up only when this specific new version was not announced yet
+		if self.desync_notified != state:
+			message = "Aggiornata da %s alle %s. Ricarica per allinearti." % (author, when)
 			widget = self.iface.messageBar().createMessage("Progetto aggiornato su db", message)
 			self.iface.messageBar().pushWidget(widget, level=Qgis.Warning)
-			# using this so the same change is not notified multiple times
 			self.desync_notified = state
+
+	def clear_out_of_sync (self):
+		self.button_desync.setVisible(False)
+		self.desync_notified = None
 
 	def reload_project_from_db(self):
 		was_tracking = self.flag_versioning_on
 		print("reloading while tracking status was", was_tracking)
 		QgsProject.instance().read()
 		self.align_update_state()
-		self.desync_notified = None
+		self.clear_out_of_sync()
 		self.iface.messageBar().pushMessage("Caricata ultima versione aggiornata dal db principale")
 		if was_tracking:
 			self.control_toggle_versioning.setChecked(True)
@@ -234,6 +268,11 @@ class PluginRunner (SnapShooterListener):
 			senza sovrascriversi a vicenda.</p>
 			<h3>Barra degli strumenti</h3>
 			<ul>
+				<li><b>Salva il progetto</b>: salva il progetto come il normale comando
+				di QGIS; con il versionamento attivo propone anche lo snapshot.</li>
+				<li><b>Versione superata</b>: indicatore che compare <i>solo</i> quando sul
+				database esiste una versione pi&ugrave; recente di quella aperta; cliccalo
+				per ricaricare e allinearti. Resta visibile finch&eacute; non ti riallinei.</li>
 				<li><b>Versionamento attivo</b>: quando attivo, a ogni salvataggio
 				il plugin propone di registrare una nuova versione nello storico
 				e controlla periodicamente se altri hanno aggiornato il progetto sul db.</li>
@@ -283,7 +322,7 @@ class PluginRunner (SnapShooterListener):
 	def prompt_add_version_to_history (self, version_state: ProjectUpdateState):
 		self.latest_state = version_state
 		self.flag_savesyncmode = False
-		self.desync_notified = None
+		self.clear_out_of_sync()
 		if self.flag_versioning_on:
 			print("now we should ask about how to deal with changes")
 			self.on_versionable_save()
@@ -346,7 +385,7 @@ class PluginRunner (SnapShooterListener):
 		if self.flag_versioning_on:
 			self.versionable_changes_left = True
 			self.snapper = self.get_shooter()
-		self.desync_notified = None
+		self.clear_out_of_sync()
 
 	def on_project_closed(self):
 		print("closedproject signal fired")
@@ -355,7 +394,7 @@ class PluginRunner (SnapShooterListener):
 			self.snapper.end_watch()
 			self.versionable_changes_left = False
 			self.latest_state = None
-			self.desync_notified = None
+			self.clear_out_of_sync()
 		try:
 			self.clear_savesync_thread_and_worker()
 
@@ -396,6 +435,10 @@ class PluginRunner (SnapShooterListener):
 		self.control_toggle_versioning.setChecked(self.flag_versioning_on)
 		self.button_sync.setEnabled(plugin_enabled)
 		self.button_check_updates.setEnabled(plugin_enabled and self.flag_versioning_on)
+
+		# the stale-version indicator only makes sense while versioning a pg project
+		if not (plugin_enabled and self.flag_versioning_on):
+			self.button_desync.setVisible(False)
 
 		if not plugin_enabled or not self.flag_versioning_on:
 			# any stuff to do?
