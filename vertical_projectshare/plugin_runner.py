@@ -54,6 +54,14 @@ class PluginRunner (SnapShooterListener):
 		bartitle.setText("VerticalShare  ")
 		self.toolbar.addWidget(bartitle)
 
+		self.button_save = QPushButton()
+		self.button_save.setObjectName("BUTTON_SAVE")
+		self.button_save.setIcon(QIcon(icon_path("save.svg")))
+		self.button_save.setFlat(True)
+		self.button_save.setToolTip("Salva il progetto")
+		self.button_save.clicked.connect(self.on_save_request)
+		self.toolbar.addWidget(self.button_save)
+
 		self.control_toggle_versioning = QCheckBox()
 		self.control_toggle_versioning.setText("versionamento attivo")
 		self.control_toggle_versioning.setIcon(QIcon(icon_path("versioning.svg")))
@@ -165,6 +173,15 @@ class PluginRunner (SnapShooterListener):
 			self.control_toggle_versioning.setChecked(True)
 			self.enable_project_versioning()
 
+
+	def on_save_request(self):
+		# reuse QGIS' own save action so the normal save flow (and the
+		# projectSaved signal the plugin relies on for versioning) fires
+		save_action = self.iface.actionSaveProject()
+		if save_action is not None:
+			save_action.trigger()
+		else:
+			QgsProject.instance().write()
 
 	def on_project_dump_request(self):
 		dialog = QFileDialog()
