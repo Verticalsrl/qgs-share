@@ -112,16 +112,17 @@ class PluginRunner (SnapShooterListener):
 		self.button_info.clicked.connect(self.open_info_dialog)
 		self.toolbar.addWidget(self.button_info)
 
-		# persistent "you are on a stale version" indicator: hidden while aligned,
-		# shown (and clickable to reload) while the db holds a newer version
-		self.button_desync = QPushButton()
-		self.button_desync.setObjectName("BUTTON_DESYNC")
-		self.button_desync.setIcon(QIcon(icon_path("desync.svg")))
-		self.button_desync.setFlat(True)
-		self.button_desync.setText(" versione superata")
-		self.button_desync.clicked.connect(self.reload_project_from_db)
-		self.button_desync.setVisible(False)
-		self.toolbar.addWidget(self.button_desync)
+		# always-visible notification bell: idle (grey) when aligned, alert (red dot)
+		# when the db holds a newer version. Click reloads when alerting, otherwise
+		# checks the db right away.
+		self.out_of_sync = False
+		self.button_notify = QPushButton()
+		self.button_notify.setObjectName("BUTTON_NOTIFY")
+		self.button_notify.setIcon(QIcon(icon_path("bell.svg")))
+		self.button_notify.setFlat(True)
+		self.button_notify.clicked.connect(self.on_notify_clicked)
+		self.toolbar.addWidget(self.button_notify)
+		self.update_notify_ui()
 
 		self.iface.addToolBar(self.toolbar)
 
@@ -178,13 +179,25 @@ class PluginRunner (SnapShooterListener):
 		when = to_local_time(state["last_updated"]).strftime("%H:%M") if state.get("last_updated") else "?"
 		return author, when
 
+	def update_notify_ui (self):
+		"""reflect the current sync state on the always-visible notification bell"""
+		if self.out_of_sync:
+			self.button_notify.setIcon(QIcon(icon_path("bell_alert.svg")))
+		else:
+			self.button_notify.setIcon(QIcon(icon_path("bell.svg")))
+			if self.flag_versioning_on:
+				self.button_notify.setToolTip("Sei allineato all'ultima versione. Clicca per verificare ora.")
+			else:
+				self.button_notify.setToolTip("Attiva il versionamento per ricevere le notifiche di nuove versioni.")
+
 	def show_out_of_sync (self, state: ProjectUpdateState):
-		"""persistent, idempotent indicator: stays visible until realignment,
+		"""idempotent indicator: the bell stays in 'alert' until realignment,
 		while the message bar heads-up fires only once per distinct new version"""
 		author, when = self.desync_description(state)
-		self.button_desync.setToolTip(
-			"Stai lavorando su una versione superata (aggiornata da %s alle %s). Clicca per ricaricare dal db." % (author, when))
-		self.button_desync.setVisible(True)
+		self.out_of_sync = True
+		self.button_notify.setIcon(QIcon(icon_path("bell_alert.svg")))
+		self.button_notify.setToolTip(
+			"Nuova versione disponibile (aggiornata da %s alle %s). Clicca per ricaricare dal db." % (author, when))
 		# one-shot heads-up only when this specific new version was not announced yet
 		if self.desync_notified != state:
 			message = "Aggiornata da %s alle %s. Ricarica per allinearti." % (author, when)
@@ -193,8 +206,20 @@ class PluginRunner (SnapShooterListener):
 			self.desync_notified = state
 
 	def clear_out_of_sync (self):
-		self.button_desync.setVisible(False)
+		self.out_of_sync = False
 		self.desync_notified = None
+		self.update_notify_ui()
+
+	def on_notify_clicked (self):
+		if self.out_of_sync:
+			self.reload_project_from_db()
+			return
+		if self.flag_versioning_on and self.snapper is not None:
+			self.check_updates_manually()
+			if not self.out_of_sync:
+				self.iface.messageBar().pushMessage("Nessuna nuova versione: sei allineato all'ultima.", level=Qgis.Info)
+		else:
+			self.iface.messageBar().pushMessage("Attiva il versionamento per ricevere le notifiche.", level=Qgis.Info)
 
 	def reload_project_from_db(self):
 		was_tracking = self.flag_versioning_on
@@ -270,9 +295,10 @@ class PluginRunner (SnapShooterListener):
 			<ul>
 				<li><b>Salva il progetto</b>: salva il progetto come il normale comando
 				di QGIS; con il versionamento attivo propone anche lo snapshot.</li>
-				<li><b>Versione superata</b>: indicatore che compare <i>solo</i> quando sul
-				database esiste una versione pi&ugrave; recente di quella aperta; cliccalo
-				per ricaricare e allinearti. Resta visibile finch&eacute; non ti riallinei.</li>
+				<li><b>Campanella notifiche</b>: sempre visibile. Spenta quando sei
+				allineato; con il <b>pallino rosso</b> quando sul database esiste una
+				versione pi&ugrave; recente di quella aperta. Cliccala per ricaricare e
+				allinearti (o, se sei gi&agrave; allineato, per verificare subito sul db).</li>
 				<li><b>Versionamento attivo</b>: quando attivo, a ogni salvataggio
 				il plugin propone di registrare una nuova versione nello storico
 				e controlla periodicamente se altri hanno aggiornato il progetto sul db.</li>
@@ -436,9 +462,12 @@ class PluginRunner (SnapShooterListener):
 		self.button_sync.setEnabled(plugin_enabled)
 		self.button_check_updates.setEnabled(plugin_enabled and self.flag_versioning_on)
 
-		# the stale-version indicator only makes sense while versioning a pg project
+		# the notification bell is shown on pg projects; with no live polling
+		# (versioning off) it falls back to the idle state
+		self.button_notify.setVisible(plugin_enabled)
 		if not (plugin_enabled and self.flag_versioning_on):
-			self.button_desync.setVisible(False)
+			self.out_of_sync = False
+		self.update_notify_ui()
 
 		if not plugin_enabled or not self.flag_versioning_on:
 			# any stuff to do?
