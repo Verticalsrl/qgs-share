@@ -6,6 +6,14 @@ from qgis._core import QgsCoordinateReferenceSystem
 
 PATH_SCRIPTS = os.path.dirname(os.path.realpath(__file__))
 PATH_DATA = os.path.join(PATH_SCRIPTS, "data")
+PATH_RESOURCES = os.path.join(PATH_SCRIPTS, "resources")
+PATH_ICONS = os.path.join(PATH_RESOURCES, "icons")
+
+
+def icon_path(name: str) -> str:
+	"""full filesystem path to a bundled svg icon (e.g. icon_path('history.svg'))"""
+	return os.path.join(PATH_ICONS, name)
+
 
 # for logging
 PLUGIN_ID= "VerticalProjectShare"

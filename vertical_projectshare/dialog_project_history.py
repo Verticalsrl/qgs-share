@@ -8,7 +8,7 @@ from qgis.PyQt import uic, QtWidgets
 from qgis._core import Qgis
 from qgis._gui import QgsMessageBar
 
-from .constants import STRFORMAT_DATETIME, STRFORMAT_DATE, STRFORMAT_TIME
+from .constants import STRFORMAT_DATETIME, STRFORMAT_DATE, STRFORMAT_TIME, icon_path
 from .snapshooter import VerticalShareSnapper, HistoryDataItem
 
 DIALOG_PROJECT_HISTORY, _ = uic.loadUiType(os.path.join(
@@ -66,14 +66,14 @@ class ProjectHistoryDialog(QtWidgets.QDialog, DIALOG_PROJECT_HISTORY):
 			btn_delete = QPushButton()
 			btn_delete.setFlat(True)
 			btn_delete.setToolTip("Elimina questa versione dallo storico")
-			btn_delete.setIcon(QIcon(":images/themes/default/mActionDeleteSelected.svg"))
+			btn_delete.setIcon(QIcon(icon_path("delete.svg")))
 			btn_delete.clicked.connect(self.get_delete_requester(rowdata))
 			self.table_snapshots.setCellWidget(i, 5, btn_delete)
 
 			btn_promote = QPushButton()
 			btn_promote.setFlat(True)
-			btn_promote.setToolTip("Promuovi a versione corrent per tutti")
-			btn_promote.setIcon(QIcon(":images/themes/default/mActionCollapseTree.svg"))
+			btn_promote.setToolTip("Promuovi a versione corrente per tutti")
+			btn_promote.setIcon(QIcon(icon_path("promote.svg")))
 			btn_promote.clicked.connect(self.get_promote_requester(rowdata))
 			self.table_snapshots.setCellWidget(i, 3, btn_promote)
 
@@ -81,7 +81,7 @@ class ProjectHistoryDialog(QtWidgets.QDialog, DIALOG_PROJECT_HISTORY):
 			btn_backup.setFlat(True)
 			btn_backup.setToolTip("Salva snapshot su disco")
 			btn_backup.clicked.connect(self.get_backup_requester(rowdata))
-			btn_backup.setIcon(QIcon(":images/themes/default/mActionFileSaveAs.svg"))
+			btn_backup.setIcon(QIcon(icon_path("backup.svg")))
 			self.table_snapshots.setCellWidget(i, 4, btn_backup)
 
 

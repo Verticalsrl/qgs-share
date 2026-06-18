@@ -3,10 +3,11 @@ import time
 
 from PyQt5.QtCore import QObject, pyqtSignal, pyqtSlot, QThread
 from PyQt5.QtGui import QIcon
-from PyQt5.QtWidgets import QToolBar, QWidget, QAction, QCheckBox, QLabel, QMenu, QPushButton, QFileDialog
+from PyQt5.QtWidgets import QToolBar, QWidget, QAction, QCheckBox, QLabel, QMenu, QPushButton, QFileDialog, QDialog, QVBoxLayout, QTextBrowser, QDialogButtonBox
 from qgis._core import QgsApplication, QgsProject, Qgis
 from qgis._gui import QgisInterface, QgsGui, QgsMessageBar
 
+from .constants import PLUGIN_TITLE, PLUGIN_VERSION, icon_path
 from .project_connector import DbProjectConnector
 from .dialog_project_history import ProjectHistoryDialog
 from .snapshooter import VerticalShareSnapper, ProjectUpdateState, SnapShooterListener
@@ -55,12 +56,13 @@ class PluginRunner (SnapShooterListener):
 
 		self.control_toggle_versioning = QCheckBox()
 		self.control_toggle_versioning.setText("versionamento attivo")
+		self.control_toggle_versioning.setIcon(QIcon(icon_path("versioning.svg")))
 		self.toolbar.addWidget(self.control_toggle_versioning)
 		self.control_toggle_versioning.clicked.connect(self.toggle_project_versioning)
 
 
 		self.button_project_history = QPushButton()
-		history_icon = QIcon(":images/themes/default/mActionNewTableRow.svg")
+		history_icon = QIcon(icon_path("history.svg"))
 		self.button_project_history.setIcon(history_icon)
 		self.button_project_history.setFlat(True)
 		self.button_project_history.setToolTip("Lista snapshot")
@@ -70,7 +72,7 @@ class PluginRunner (SnapShooterListener):
 
 		self.button_sync: QPushButton = QPushButton()
 		self.button_sync.setObjectName("BUTTON_SYNC")
-		self.button_sync.setIcon(QIcon(":images/themes/default/mActionRefresh.svg"))
+		self.button_sync.setIcon(QIcon(icon_path("sync.svg")))
 		self.button_sync.setFlat(True)
 		self.button_sync.setToolTip("Ricarica versione aggiornata dal db")
 		self.button_sync.clicked.connect(self.reload_project_from_db)
@@ -78,7 +80,7 @@ class PluginRunner (SnapShooterListener):
 
 		self.button_check_updates: QPushButton = QPushButton()
 		self.button_check_updates.setObjectName("BUTTON_CHECKUPDATES")
-		self.button_check_updates.setIcon(QIcon(":images/themes/default/mIconQueryHistory.svg"))
+		self.button_check_updates.setIcon(QIcon(icon_path("check_updates.svg")))
 		self.button_check_updates.setFlat(True)
 		self.button_check_updates.setToolTip("Verifica aggiornamenti su db")
 		self.button_check_updates.clicked.connect(self.check_updates_manually)
@@ -90,9 +92,17 @@ class PluginRunner (SnapShooterListener):
 		self.button_project_quickdump.setObjectName("BUTTON_QUICKDUMP")
 		self.button_project_quickdump.setFlat(True)
 		self.button_project_quickdump.setToolTip("Salva copia locale in QGZ")
-		self.button_project_quickdump.setIcon(QIcon(":images/themes/default/mActionFileSaveAs.svg"))
+		self.button_project_quickdump.setIcon(QIcon(icon_path("save_local.svg")))
 		self.button_project_quickdump.clicked.connect(self.on_project_dump_request)
 		self.toolbar.addWidget(self.button_project_quickdump)
+
+		self.button_info = QPushButton()
+		self.button_info.setObjectName("BUTTON_INFO")
+		self.button_info.setIcon(QIcon(icon_path("info.svg")))
+		self.button_info.setFlat(True)
+		self.button_info.setToolTip("Informazioni e istruzioni d'uso")
+		self.button_info.clicked.connect(self.open_info_dialog)
+		self.toolbar.addWidget(self.button_info)
 
 		self.iface.addToolBar(self.toolbar)
 
@@ -195,6 +205,63 @@ class PluginRunner (SnapShooterListener):
 		# we get no feedback, it's all handled in the dialog
 
 		pass
+
+	def build_info_html(self) -> str:
+		return """
+			<h2>{title}</h2>
+			<p><b>Versione:</b> {version}<br>
+			<b>Autore:</b> Vertical Srl &mdash; <a href="https://vertical-srl.it">vertical-srl.it</a></p>
+			<p>Condivide e versiona i progetti QGIS salvati su PostgreSQL: ogni
+			salvataggio pu&ograve; essere registrato come snapshot nello storico,
+			cos&igrave; pi&ugrave; utenti possono lavorare sullo stesso progetto
+			senza sovrascriversi a vicenda.</p>
+			<h3>Barra degli strumenti</h3>
+			<ul>
+				<li><b>Versionamento attivo</b>: quando attivo, a ogni salvataggio
+				il plugin propone di registrare una nuova versione nello storico
+				e controlla periodicamente se altri hanno aggiornato il progetto sul db.</li>
+				<li><b>Lista snapshot</b>: apre lo storico delle versioni del progetto,
+				da cui &egrave; possibile promuovere, scaricare o eliminare una versione.</li>
+				<li><b>Ricarica versione aggiornata dal db</b>: ricarica dal database
+				l'ultima versione corrente del progetto.</li>
+				<li><b>Verifica aggiornamenti su db</b>: controlla subito se sul
+				database esiste una versione pi&ugrave; recente di quella aperta.</li>
+				<li><b>Salva copia locale in QGZ</b>: esporta una copia del progetto
+				corrente in un file <code>.qgz</code> sul disco.</li>
+				<li><b>Informazioni</b>: questa finestra.</li>
+			</ul>
+			<h3>Finestra storico</h3>
+			<ul>
+				<li><b>Promuovi a working copy</b>: rende la versione selezionata
+				quella corrente per tutti gli utenti.</li>
+				<li><b>Salva snapshot su disco</b>: esporta la versione selezionata
+				come file <code>.qgz</code>.</li>
+				<li><b>Elimina</b>: rimuove la versione selezionata dallo storico.</li>
+			</ul>
+			<h3>Requisiti</h3>
+			<p>Il plugin si attiva solo quando il progetto aperto &egrave; archiviato
+			su PostgreSQL (storage <i>postgresql</i>). Con progetti su file i comandi
+			restano disabilitati.</p>
+		""".format(title=PLUGIN_TITLE, version=PLUGIN_VERSION)
+
+	def open_info_dialog(self):
+		dialog = QDialog(self.iface.mainWindow())
+		dialog.setWindowTitle("%s - Informazioni" % PLUGIN_TITLE)
+		dialog.setWindowIcon(QIcon(icon_path("info.svg")))
+		dialog.resize(560, 600)
+
+		layout = QVBoxLayout(dialog)
+		browser = QTextBrowser()
+		browser.setOpenExternalLinks(True)
+		browser.setHtml(self.build_info_html())
+		layout.addWidget(browser)
+
+		buttons = QDialogButtonBox(QDialogButtonBox.Close)
+		buttons.rejected.connect(dialog.close)
+		buttons.accepted.connect(dialog.close)
+		layout.addWidget(buttons)
+
+		dialog.exec_()
 
 	def prompt_add_version_to_history (self, version_state: ProjectUpdateState):
 		self.latest_state = version_state

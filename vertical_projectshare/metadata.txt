@@ -25,4 +25,4 @@ email=supporto@vertical-srl.it
 
 experimental=True
 
-icon=resources/icon.png
+icon=resources/icons/icon.svg
