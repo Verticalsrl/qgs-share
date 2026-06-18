@@ -154,8 +154,7 @@ class ProjectHistoryDialog(QtWidgets.QDialog, DIALOG_PROJECT_HISTORY):
 					self.messageBar.pushMessage("Modifica salvata localmente su : " + str(dest_path), level=Qgis.Success)
 
 			except Exception as ex:
-				self.messageBar.pushMessage("Cancellazione fallita: " + str(ex), level=Qgis.Critical)
-				pass
+				self.messageBar.pushMessage("Salvataggio fallito: " + str(ex), level=Qgis.Critical)
 
 
 	def get_promote_requester (self, change: HistoryDataItem):

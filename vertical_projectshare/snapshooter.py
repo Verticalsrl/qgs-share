@@ -1,11 +1,12 @@
 import time
 from abc import ABC
+from contextlib import closing
 from typing import Dict, TypedDict, NamedTuple, Optional
 import datetime
 
 from PyQt5.QtCore import QObject, pyqtSlot, pyqtSignal, QThread
+import psycopg2
 from psycopg2 import sql
-from psycopg2._psycopg import connection
 
 from .project_connector import ProjectUpdateState, DbProjectConnector
 from .constants import TABLE_VERTICAL_SHARE, TABLE_PROJECTS_QGIS
@@ -52,7 +53,7 @@ class VerticalShareSnapper:
 		self.listener: SnapShooterListener = None
 
 	def get_conn(self):
-		return connection(self.connector.connstr)
+		return psycopg2.connect(self.connector.connstr)
 
 	def get_live_project_update_state (self):
 		return self.project_connector.get_project_update_state()
@@ -98,17 +99,20 @@ class VerticalShareSnapper:
 				{notes},
 				md5({table_qgis}.content)
 			FROM {schema}.{table_qgis}
+			WHERE {table_qgis}.name = {projectname}
 		""").format(
 			schema=sql.Identifier(self.parsed_uri.schema), table_vertical=sql.Identifier(TABLE_VERTICAL_SHARE), table_qgis=sql.Identifier(TABLE_PROJECTS_QGIS),
-			changename=sql.Literal(changename), notes=sql.Literal(notes), changedby=sql.Literal(self.parsed_uri.username)
+			changename=sql.Literal(changename), notes=sql.Literal(notes), changedby=sql.Literal(self.parsed_uri.username),
+			projectname=sql.Literal(self.parsed_uri.project)
 		)
 
-		with self.get_conn() as conn: # type: conn
-			with conn.cursor() as cur:
-				print(query.as_string(cur))
-				cur.execute(query)
+		with closing(self.get_conn()) as conn:
+			with conn:
+				with conn.cursor() as cur:
+					print(query.as_string(cur))
+					cur.execute(query)
 
-				print("data saved")
+					print("data saved")
 
 	def has_schema_tables(self):
 		cols = self.connector.get_table_columns(self.parsed_uri.schema, TABLE_VERTICAL_SHARE)
@@ -147,9 +151,10 @@ class VerticalShareSnapper:
 			checksum			VARCHAR
 		)""").format(schema=sql.Identifier(self.parsed_uri.schema), tablename=sql.Identifier(TABLE_VERTICAL_SHARE))
 
-		with self.get_conn() as conn: # type: conn
-			with conn.cursor() as cur:
-				cur.execute(query)
+		with closing(self.get_conn()) as conn:
+			with conn:
+				with conn.cursor() as cur:
+					cur.execute(query)
 
 	def get_change_data_raw(self, changeid: str):
 		query = sql.SQL("""
@@ -177,9 +182,10 @@ class VerticalShareSnapper:
 			projectid=sql.Literal(self.parsed_uri.project), changeid=sql.Literal(changeid)
 		)
 
-		with self.get_conn() as conn: # type: conn
-			with conn.cursor() as cur:
-				cur.execute(query)
+		with closing(self.get_conn()) as conn:
+			with conn:
+				with conn.cursor() as cur:
+					cur.execute(query)
 
 	def on_project_polled (self, ts: float, data: ProjectUpdateState):
 		print("project polled at ", ts, data)
@@ -237,13 +243,13 @@ class VerticalShareSnapper:
 			changeid=sql.Literal(changeid), projectid=sql.Literal(self.parsed_uri.project)
 		)
 
-		with self.get_conn() as conn: # type: conn
-			with conn.cursor() as cur:
-				print(query.as_string(cur))
-				cur.execute(query)
+		with closing(self.get_conn()) as conn:
+			with conn:
+				with conn.cursor() as cur:
+					print(query.as_string(cur))
+					cur.execute(query)
 
-				print("data saved")
-		pass
+					print("data saved")
 
 
 class ProjectStatePollerWorker (QObject):

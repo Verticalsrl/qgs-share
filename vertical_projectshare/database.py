@@ -1,9 +1,10 @@
 import urllib.parse
+from contextlib import closing
 from typing import Dict, List, Generator, TypeVar, TypedDict, Tuple
 
+import psycopg2
 import psycopg2.extras
 from psycopg2 import sql
-from psycopg2._psycopg import connection
 from psycopg2.sql import SQL, Composed
 from qgis._core import QgsAbstractDatabaseProviderConnection, QgsDataSourceUri
 
@@ -65,8 +66,8 @@ class PgConnector:
 		return PgConnector.get_postgres_connstring(**uridict)
 
 	def get_query_data (self, query: SQL|Composed, debug: bool = False) -> Generator[T, None, None]:
-		# with self.pooler.getconn() as conn:  # type: connection
-		with connection(self.connstr) as conn:
+		# a fresh connection is opened per query and ALWAYS closed afterwards to avoid leaks
+		with closing(psycopg2.connect(self.connstr)) as conn:
 			with conn.cursor(cursor_factory = psycopg2.extras.DictCursor) as cur:
 				if debug:
 					print("QUERY DEBUG: " + query.as_string(cur))
@@ -93,11 +94,12 @@ class PgConnector:
 		return coldefs
 
 	def execute_alter_query (self, query: SQL|Composed, debug: bool = False) -> Tuple[int, str]:
-		# with self.pooler.getconn() as conn: # type: connection
-		with connection(self.connstr) as conn:
-			with conn.cursor() as cur:
-				if debug:
-					print("QUERY DEBUG: " + query.as_string(cur))
-				cur.execute(query)
-				return cur.rowcount, cur.statusmessage
+		# `with conn` commits/rolls back the transaction, `closing` guarantees the connection is closed
+		with closing(psycopg2.connect(self.connstr)) as conn:
+			with conn:
+				with conn.cursor() as cur:
+					if debug:
+						print("QUERY DEBUG: " + query.as_string(cur))
+					cur.execute(query)
+					return cur.rowcount, cur.statusmessage
 

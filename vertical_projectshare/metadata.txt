@@ -9,8 +9,8 @@ name=Vertical Project Share
 qgisMinimumVersion=3.22
 description=Share project files via PostgreSQL
 about=Vertical
-version=0.0.2
-repository=https://gitlab.com/
+version=0.0.6
+repository=https://github.com/Verticalsrl/qgs-share
 
 author=Vertical Srl
 email=supporto@vertical-srl.it

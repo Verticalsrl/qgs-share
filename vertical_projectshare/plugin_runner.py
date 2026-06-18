@@ -171,10 +171,7 @@ class PluginRunner (SnapShooterListener):
 					self.dump_project_copy_to(dest_path)
 					self.iface.messageBar().pushMessage("Modifica salvata localmente su : " + str(dest_path), level=Qgis.Success)
 			except Exception as ex:
-				self.iface.messageBar().pushMessage("Cancellazione fallita: " + str(ex), level=Qgis.Critical)
-				pass
-
-		pass
+				self.iface.messageBar().pushMessage("Salvataggio fallito: " + str(ex), level=Qgis.Critical)
 
 	def on_project_changing(self):
 		print("project set to dirty -- straight")
@@ -224,7 +221,7 @@ class PluginRunner (SnapShooterListener):
 		self.clear_savesync_thread_and_worker()
 
 	def on_save_mode_sync_fail(self, ts: float, elapsed: float):
-		self.iface.messageBar().pushMessage("Verifica allineamento db fallita dopo %d secondi, ricaricare il progetto" % (elapsed,), level=Qgis.CRITICAL)
+		self.iface.messageBar().pushMessage("Verifica allineamento db fallita dopo %d secondi, ricaricare il progetto" % (elapsed,), level=Qgis.Critical)
 		self.flag_savesyncmode = False
 		self.clear_savesync_thread_and_worker()
 
