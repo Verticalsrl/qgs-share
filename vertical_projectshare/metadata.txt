@@ -1,0 +1,28 @@
+; plugin metadata information
+; reference: https://docs.qgis.org/3.34/en/docs/pyqgis_developer_cookbook/plugins/plugins.html#metadata-txt
+
+[general]
+
+; MANDATORY VALUES
+
+name=Vertical Project Share
+qgisMinimumVersion=3.22
+description=Share project files via PostgreSQL
+about=Vertical
+version=0.0.2
+repository=https://gitlab.com/
+
+author=Vertical Srl
+email=supporto@vertical-srl.it
+
+
+; OPTIONAL VALUES
+
+; category: should only be specified IF we do not want to use the Plugins menu
+; category=Raster,Vector,Database,Mesh,Web
+
+
+
+experimental=True
+
+icon=resources/icon.png
