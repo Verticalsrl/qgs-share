@@ -4,7 +4,8 @@ from contextlib import closing
 from typing import Dict, TypedDict, NamedTuple, Optional
 import datetime
 
-from PyQt5.QtCore import QObject, pyqtSlot, pyqtSignal, QThread
+# qgis.PyQt re-exports PyQt5 on QGIS 3 (Qt5) and PyQt6 on QGIS 4 (Qt6): same code, both versions
+from qgis.PyQt.QtCore import QObject, pyqtSlot, pyqtSignal, QThread
 import psycopg2
 from psycopg2 import sql
 

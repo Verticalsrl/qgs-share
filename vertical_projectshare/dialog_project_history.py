@@ -1,12 +1,14 @@
 import os
 from typing import TypedDict, Dict, List
 
-from PyQt5.QtCore import pyqtSignal
-from PyQt5.QtGui import QIcon
-from PyQt5.QtWidgets import QTextEdit, QLineEdit, QPushButton, QLabel, QTabBar, QTableWidget, QTableWidgetItem, QHBoxLayout, QMessageBox, QFileDialog, QApplication
+# Qt5/Qt6 compatible: qgis.PyQt re-exports PyQt5 on QGIS 3 (Qt5) and PyQt6 on QGIS 4 (Qt6);
+# qgis.core/qgis.gui are the public API (not the private qgis._core/_gui). Same code, both versions.
+from qgis.PyQt.QtCore import pyqtSignal
+from qgis.PyQt.QtGui import QIcon
+from qgis.PyQt.QtWidgets import QTextEdit, QLineEdit, QPushButton, QLabel, QTabBar, QTableWidget, QTableWidgetItem, QHBoxLayout, QMessageBox, QFileDialog, QApplication
 from qgis.PyQt import uic, QtWidgets
-from qgis._core import Qgis
-from qgis._gui import QgsMessageBar
+from qgis.core import Qgis
+from qgis.gui import QgsMessageBar
 
 from .constants import STRFORMAT_DATETIME, STRFORMAT_DATE, STRFORMAT_TIME, icon_path, to_local_time
 from .snapshooter import VerticalShareSnapper, HistoryDataItem
@@ -116,16 +118,16 @@ class ProjectHistoryDialog(QtWidgets.QDialog, DIALOG_PROJECT_HISTORY):
 		msgBox = QMessageBox(self)
 		msgBox.setText("Conferma eliminazione")
 		msgBox.setInformativeText("Vuoi cancellare %s dallo storico?" % (changedesc,))
-		msgBox.setStandardButtons(QMessageBox.Ok | QMessageBox.StandardButton.Cancel)
-		msgBox.setDefaultButton(QMessageBox.Cancel)
+		msgBox.setStandardButtons(QMessageBox.StandardButton.Ok | QMessageBox.StandardButton.Cancel)
+		msgBox.setDefaultButton(QMessageBox.StandardButton.Cancel)
 		result = msgBox.exec()
-		if result == QMessageBox.Ok:
+		if result == QMessageBox.StandardButton.Ok:
 			try:
 				print("delete confirmed")
 				self.snapper.delete_change(change["changeid"])
 				self.refresh_history_table()
 			except Exception as ex:
-				self.messageBar.pushMessage("Cancellazione fallita: " + str(ex), level=Qgis.Critical)
+				self.messageBar.pushMessage("Cancellazione fallita: " + str(ex), level=Qgis.MessageLevel.Critical)
 				self.refresh_history_table()
 		else:
 			print("delete cancelled")
@@ -137,12 +139,12 @@ class ProjectHistoryDialog(QtWidgets.QDialog, DIALOG_PROJECT_HISTORY):
 
 	def request_download_history_item(self, change: HistoryDataItem):
 		dialog = QFileDialog(self)
-		dialog.setFileMode(QFileDialog.AnyFile)
-		dialog.setViewMode(QFileDialog.Detail)
+		dialog.setFileMode(QFileDialog.FileMode.AnyFile)
+		dialog.setViewMode(QFileDialog.ViewMode.Detail)
 		dialog.setDefaultSuffix("qgz")
 		dialog.setNameFilter("Qgis compressed project (*.qgz)")
-		dialog.setAcceptMode(QFileDialog.AcceptSave)
-		if dialog.exec_():
+		dialog.setAcceptMode(QFileDialog.AcceptMode.AcceptSave)
+		if dialog.exec():
 			try:
 				selection = dialog.selectedFiles()
 				if selection is not None and len(selection) == 1:
@@ -151,10 +153,10 @@ class ProjectHistoryDialog(QtWidgets.QDialog, DIALOG_PROJECT_HISTORY):
 					content = data_checksum["content"]
 					with open(dest_path, 'w+b') as fp:
 						fp.write(content)
-					self.messageBar.pushMessage("Modifica salvata localmente su : " + str(dest_path), level=Qgis.Success)
+					self.messageBar.pushMessage("Modifica salvata localmente su : " + str(dest_path), level=Qgis.MessageLevel.Success)
 
 			except Exception as ex:
-				self.messageBar.pushMessage("Salvataggio fallito: " + str(ex), level=Qgis.Critical)
+				self.messageBar.pushMessage("Salvataggio fallito: " + str(ex), level=Qgis.MessageLevel.Critical)
 
 
 	def get_promote_requester (self, change: HistoryDataItem):
@@ -168,16 +170,16 @@ class ProjectHistoryDialog(QtWidgets.QDialog, DIALOG_PROJECT_HISTORY):
 		msgBox = QMessageBox(self)
 		msgBox.setText("Promozione modifica")
 		msgBox.setInformativeText("Vuoi promuovere %s a working copy?" % (changedesc,))
-		msgBox.setStandardButtons(QMessageBox.Ok | QMessageBox.StandardButton.Cancel)
-		msgBox.setDefaultButton(QMessageBox.Cancel)
+		msgBox.setStandardButtons(QMessageBox.StandardButton.Ok | QMessageBox.StandardButton.Cancel)
+		msgBox.setDefaultButton(QMessageBox.StandardButton.Cancel)
 		result = msgBox.exec()
-		if result == QMessageBox.Ok:
+		if result == QMessageBox.StandardButton.Ok:
 			print("promote confirmed")
 			try:
 				self.snapper.promote_snapshot(change["changeid"])
 				self.promoted_snapshot.emit(change["changeid"])
 				self.close()
 			except Exception as ex:
-				self.messageBar.pushMessage("Promozione a working copy fallita: " + str(ex), level=Qgis.Critical)
+				self.messageBar.pushMessage("Promozione a working copy fallita: " + str(ex), level=Qgis.MessageLevel.Critical)
 		else:
 			print("promote cancelled")

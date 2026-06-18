@@ -3,7 +3,7 @@
 import datetime
 import os
 
-from qgis._core import QgsCoordinateReferenceSystem
+from qgis.core import QgsCoordinateReferenceSystem
 
 PATH_SCRIPTS = os.path.dirname(os.path.realpath(__file__))
 PATH_DATA = os.path.join(PATH_SCRIPTS, "data")

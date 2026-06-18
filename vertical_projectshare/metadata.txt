@@ -25,4 +25,7 @@ email=supporto@vertical-srl.it
 
 experimental=True
 
+; declares Qt6 compatibility so the QGIS 4 plugin manager lists/loads it
+supportsQt6=True
+
 icon=resources/icons/icon.svg

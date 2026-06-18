@@ -1,6 +1,7 @@
 import os
 
-from PyQt5.QtWidgets import QTextEdit, QLineEdit, QPushButton, QLabel
+# qgis.PyQt re-exports PyQt5 on QGIS 3 (Qt5) and PyQt6 on QGIS 4 (Qt6): same code, both versions
+from qgis.PyQt.QtWidgets import QTextEdit, QLineEdit, QPushButton, QLabel
 from qgis.PyQt import uic, QtWidgets
 
 DIALOG_SNAPSHOT_SAVE, _ = uic.loadUiType(os.path.join(

@@ -1,11 +1,14 @@
 import os
 import time
 
-from PyQt5.QtCore import QObject, pyqtSignal, pyqtSlot, QThread
-from PyQt5.QtGui import QIcon
-from PyQt5.QtWidgets import QToolBar, QWidget, QAction, QCheckBox, QLabel, QMenu, QPushButton, QFileDialog, QDialog, QVBoxLayout, QTextBrowser, QDialogButtonBox
-from qgis._core import QgsApplication, QgsProject, Qgis
-from qgis._gui import QgisInterface, QgsGui, QgsMessageBar
+# Qt5/Qt6 compatible: qgis.PyQt re-exports PyQt5 on QGIS 3 (Qt5) and PyQt6 on QGIS 4 (Qt6);
+# qgis.core/qgis.gui are the public API (not the private qgis._core/_gui). Same code, both versions.
+from qgis.PyQt.QtCore import QObject, pyqtSignal, pyqtSlot, QThread
+from qgis.PyQt.QtGui import QIcon
+# note: QAction is NOT imported here on purpose -> in Qt6 it lives in QtGui, not QtWidgets
+from qgis.PyQt.QtWidgets import QToolBar, QWidget, QCheckBox, QLabel, QMenu, QPushButton, QFileDialog, QDialog, QVBoxLayout, QTextBrowser, QDialogButtonBox
+from qgis.core import QgsApplication, QgsProject, Qgis
+from qgis.gui import QgisInterface, QgsGui, QgsMessageBar
 
 from .constants import PLUGIN_TITLE, PLUGIN_VERSION, icon_path, to_local_time
 from .project_connector import DbProjectConnector
@@ -203,7 +206,7 @@ class PluginRunner (SnapShooterListener):
 		if self.desync_notified != state:
 			message = "Aggiornata da %s alle %s. Ricarica per allinearti." % (author, when)
 			widget = self.iface.messageBar().createMessage("Progetto aggiornato su db", message)
-			self.iface.messageBar().pushWidget(widget, level=Qgis.Warning)
+			self.iface.messageBar().pushWidget(widget, level=Qgis.MessageLevel.Warning)
 			self.desync_notified = state
 
 	def clear_out_of_sync (self):
@@ -218,9 +221,9 @@ class PluginRunner (SnapShooterListener):
 		if self.flag_versioning_on and self.snapper is not None:
 			self.check_updates_manually()
 			if not self.out_of_sync:
-				self.iface.messageBar().pushMessage("Nessuna nuova versione: sei allineato all'ultima.", level=Qgis.Info)
+				self.iface.messageBar().pushMessage("Nessuna nuova versione: sei allineato all'ultima.", level=Qgis.MessageLevel.Info)
 		else:
-			self.iface.messageBar().pushMessage("Attiva il versionamento per ricevere le notifiche.", level=Qgis.Info)
+			self.iface.messageBar().pushMessage("Attiva il versionamento per ricevere le notifiche.", level=Qgis.MessageLevel.Info)
 
 	def reload_project_from_db(self):
 		was_tracking = self.flag_versioning_on
@@ -245,20 +248,20 @@ class PluginRunner (SnapShooterListener):
 
 	def on_project_dump_request(self):
 		dialog = QFileDialog()
-		dialog.setFileMode(QFileDialog.AnyFile)
-		dialog.setViewMode(QFileDialog.Detail)
+		dialog.setFileMode(QFileDialog.FileMode.AnyFile)
+		dialog.setViewMode(QFileDialog.ViewMode.Detail)
 		dialog.setDefaultSuffix("qgz")
 		dialog.setNameFilter("Qgis compressed project (*.qgz)")
-		dialog.setAcceptMode(QFileDialog.AcceptSave)
-		if dialog.exec_():
+		dialog.setAcceptMode(QFileDialog.AcceptMode.AcceptSave)
+		if dialog.exec():
 			try:
 				selection = dialog.selectedFiles()
 				if selection is not None and len(selection) == 1:
 					dest_path = selection[0]
 					self.dump_project_copy_to(dest_path)
-					self.iface.messageBar().pushMessage("Modifica salvata localmente su : " + str(dest_path), level=Qgis.Success)
+					self.iface.messageBar().pushMessage("Modifica salvata localmente su : " + str(dest_path), level=Qgis.MessageLevel.Success)
 			except Exception as ex:
-				self.iface.messageBar().pushMessage("Salvataggio fallito: " + str(ex), level=Qgis.Critical)
+				self.iface.messageBar().pushMessage("Salvataggio fallito: " + str(ex), level=Qgis.MessageLevel.Critical)
 
 	def on_project_changing(self):
 		print("project set to dirty -- straight")
@@ -268,16 +271,16 @@ class PluginRunner (SnapShooterListener):
 		try:
 			QgsProject.instance().read()
 			self.align_update_state()
-			self.iface.messageBar().pushMessage("Progetto aggiornato da snapshot", level=Qgis.Info)
+			self.iface.messageBar().pushMessage("Progetto aggiornato da snapshot", level=Qgis.MessageLevel.Info)
 		except Exception as ex:
-			self.iface.messageBar().pushMessage("Errore nell'aggiornamento del progetto: " + str(ex), level=Qgis.Critical)
+			self.iface.messageBar().pushMessage("Errore nell'aggiornamento del progetto: " + str(ex), level=Qgis.MessageLevel.Critical)
 
 	def open_history_dialog(self):
 		print("showing history")
 		dialog = ProjectHistoryDialog(QgsProject.instance().fileName())
 		dialog.promoted_snapshot.connect(self.on_snapshot_promoted)
 		dialog.show()
-		dialog.exec_()
+		dialog.exec()
 
 		# we get no feedback, it's all handled in the dialog
 
@@ -339,12 +342,12 @@ class PluginRunner (SnapShooterListener):
 		browser.setHtml(self.build_info_html())
 		layout.addWidget(browser)
 
-		buttons = QDialogButtonBox(QDialogButtonBox.Close)
+		buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Close)
 		buttons.rejected.connect(dialog.close)
 		buttons.accepted.connect(dialog.close)
 		layout.addWidget(buttons)
 
-		dialog.exec_()
+		dialog.exec()
 
 	def prompt_add_version_to_history (self, version_state: ProjectUpdateState):
 		self.latest_state = version_state
@@ -371,7 +374,7 @@ class PluginRunner (SnapShooterListener):
 		self.clear_savesync_thread_and_worker()
 
 	def on_save_mode_sync_fail(self, ts: float, elapsed: float):
-		self.iface.messageBar().pushMessage("Verifica allineamento db fallita dopo %d secondi, ricaricare il progetto" % (elapsed,), level=Qgis.Critical)
+		self.iface.messageBar().pushMessage("Verifica allineamento db fallita dopo %d secondi, ricaricare il progetto" % (elapsed,), level=Qgis.MessageLevel.Critical)
 		self.flag_savesyncmode = False
 		self.clear_savesync_thread_and_worker()
 
@@ -534,7 +537,7 @@ class PluginRunner (SnapShooterListener):
 		dialog = SnapshotSaveDialog()
 		dialog.label_changes.setText("Modifiche di %s a %s" % (shooter.parsed_uri.username, shooter.parsed_uri.project))
 		dialog.show()
-		if dialog.exec_():
+		if dialog.exec():
 			changename = dialog.field_snapshot_title.text()
 			changenotes = dialog.field_snapshot_notes.toPlainText()
 		else:
@@ -545,9 +548,9 @@ class PluginRunner (SnapShooterListener):
 		try:
 			shooter.save_project_snapshot(changename, changenotes)
 			self.versionable_changes_left = False
-			self.iface.messageBar().pushMessage("Versione salvata nello storico", level=Qgis.Success)
+			self.iface.messageBar().pushMessage("Versione salvata nello storico", level=Qgis.MessageLevel.Success)
 		except Exception as ex:
-			self.iface.messageBar().pushMessage("Salvataggio della versione fallito: " + str(ex), level=Qgis.Critical)
+			self.iface.messageBar().pushMessage("Salvataggio della versione fallito: " + str(ex), level=Qgis.MessageLevel.Critical)
 
 
 	def initToolbar (self):
