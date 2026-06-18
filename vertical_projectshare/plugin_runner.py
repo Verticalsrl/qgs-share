@@ -524,15 +524,6 @@ class PluginRunner (SnapShooterListener):
 			self.snapper.end_watch()
 
 
-	def is_same_as_last_snapshot (self, shooter) -> bool:
-		"""True when the freshly saved project is byte-identical to the last
-		recorded version (so we can auto-annotate the duplicate)."""
-		if not shooter.has_schema_tables():
-			return False
-		state = shooter.get_live_project_update_state()
-		last_hash = shooter.get_latest_snaphost_hash()
-		return state is not None and last_hash is not None and state["content_hash"] == last_hash
-
 	def on_versionable_save(self):
 		# versioning is ON, so we ALWAYS record a version here; the dialog only
 		# collects optional notes (Conferma = with notes, Salta = without)
@@ -550,10 +541,6 @@ class PluginRunner (SnapShooterListener):
 			# skipped: version saved anyway, just without user notes
 			changename = ""
 			changenotes = ""
-
-		# if no note was given and nothing actually changed, say so automatically
-		if not changenotes.strip() and self.is_same_as_last_snapshot(shooter):
-			changenotes = "Nessuna modifica rispetto alla versione precedente"
 
 		try:
 			shooter.save_project_snapshot(changename, changenotes)
