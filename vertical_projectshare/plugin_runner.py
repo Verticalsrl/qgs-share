@@ -376,6 +376,9 @@ class PluginRunner (SnapShooterListener):
 		self.clear_savesync_thread_and_worker()
 
 	def sync_update_state (self):
+		# DEPRECATED: the old save flow waited on this background watcher to detect
+		# the db change before prompting. Now on_project_save versions directly, so
+		# this is no longer wired up (kept for reference / possible reuse).
 		if not self.flag_savesyncmode:
 			self.flag_savesyncmode = True
 			self.savesync_thread = QThread()
@@ -435,8 +438,15 @@ class PluginRunner (SnapShooterListener):
 		print("project saved signal fired")
 		self.setActiveStates()
 		print("verified plugin state (e.g. project storage change)")
-		if self.isPostgresProject():
-			self.sync_update_state()
+		if not self.isPostgresProject():
+			return
+		# versioning is a binary choice of the toggle: while it is ON, every save
+		# records a version. The only optional thing is the notes.
+		if self.flag_versioning_on:
+			self.on_versionable_save()
+		# realign to the just-saved state so our own save does not light the bell
+		self.align_update_state()
+		self.clear_out_of_sync()
 
 	def setActiveStates (self):
 
@@ -514,45 +524,43 @@ class PluginRunner (SnapShooterListener):
 			self.snapper.end_watch()
 
 
-	def changes_are_versionable (self)-> bool:
-
-		versionable_uri = QgsProject.instance().fileName()
-		shooter = VerticalShareSnapper.get_for(versionable_uri)
+	def is_same_as_last_snapshot (self, shooter) -> bool:
+		"""True when the freshly saved project is byte-identical to the last
+		recorded version (so we can auto-annotate the duplicate)."""
 		if not shooter.has_schema_tables():
-			return True
-		else:
-			return self.versionable_changes_left
-			# live_checksum = shooter.get_live_project_hash()
-			# snapshot_checksum = shooter.get_latest_snaphost_hash()
-			# print("checksums: live %s snapped %s SAME? %s" % (live_checksum, snapshot_checksum, str(live_checksum == snapshot_checksum)))
-			# return live_checksum != snapshot_checksum
+			return False
+		state = shooter.get_live_project_update_state()
+		last_hash = shooter.get_latest_snaphost_hash()
+		return state is not None and last_hash is not None and state["content_hash"] == last_hash
 
 	def on_versionable_save(self):
-		# note that we ALREADY aligned working state in on_project_save
-		if not self.changes_are_versionable():
-			print("no actual changes to save")
-			return
+		# versioning is ON, so we ALWAYS record a version here; the dialog only
+		# collects optional notes (Conferma = with notes, Salta = without)
 		versionable_uri = QgsProject.instance().fileName()
 		print("versioning for ", versionable_uri)
-		dialog = SnapshotSaveDialog()
 		shooter = VerticalShareSnapper.get_for(versionable_uri)
+
+		dialog = SnapshotSaveDialog()
 		dialog.label_changes.setText("Modifiche di %s a %s" % (shooter.parsed_uri.username, shooter.parsed_uri.project))
 		dialog.show()
 		if dialog.exec_():
-			print ("dialog confirmed")
 			changename = dialog.field_snapshot_title.text()
 			changenotes = dialog.field_snapshot_notes.toPlainText()
+		else:
+			# skipped: version saved anyway, just without user notes
+			changename = ""
+			changenotes = ""
+
+		# if no note was given and nothing actually changed, say so automatically
+		if not changenotes.strip() and self.is_same_as_last_snapshot(shooter):
+			changenotes = "Nessuna modifica rispetto alla versione precedente"
+
+		try:
 			shooter.save_project_snapshot(changename, changenotes)
 			self.versionable_changes_left = False
-			msg = "modifiche al progetto salvate nello storico"
-			sev = Qgis.Success
-		else:
-			print("dialog canceled")
-			self.versionable_changes_left = True
-			msg = "modifiche al progetto non salvate nello storico"
-			sev = Qgis.Warning
-
-		self.iface.messageBar().pushMessage(msg, level=sev)
+			self.iface.messageBar().pushMessage("Versione salvata nello storico", level=Qgis.Success)
+		except Exception as ex:
+			self.iface.messageBar().pushMessage("Salvataggio della versione fallito: " + str(ex), level=Qgis.Critical)
 
 
 	def initToolbar (self):

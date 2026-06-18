@@ -21,5 +21,10 @@ class SnapshotSaveDialog(QtWidgets.QDialog, DIALOG_SNAPSHOT_SAVE):
 		super().__init__()
 		self.setupUi(self)
 
+		# versioning always happens while it is ON: this dialog only collects
+		# optional notes, so the buttons are "save with notes" vs "skip notes"
+		self.button_confirm.setText("Salva con note")
+		self.button_cancel.setText("Salta (versione senza note)")
+
 		self.button_confirm.clicked.connect(self.accept)
 		self.button_cancel.clicked.connect(self.close)
