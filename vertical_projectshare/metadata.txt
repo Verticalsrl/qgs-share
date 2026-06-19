@@ -7,10 +7,12 @@
 
 name=Vertical Project Share
 qgisMinimumVersion=3.22
-description=Share project files via PostgreSQL
-about=Vertical
+description=Version and share QGIS projects stored in PostgreSQL.
+about=Vertical Project Share adds a version history on top of QGIS projects stored natively in PostgreSQL (the qgis_projects table). While versioning is on, every save records a snapshot (project content, author, time, optional notes) in a history table, so several people can work on the same shared project without silently overwriting each other. From the history you can promote a previous version to the working copy, download it as a .qgz, or delete it. A notification bell warns you when someone else has saved a newer version on the database. The plugin is active only for projects stored in PostgreSQL. Requires the psycopg2 Python module. Compatible with QGIS 3 (Qt5) and QGIS 4 (Qt6).
 version=0.0.6
 repository=https://github.com/Verticalsrl/qgs-share
+tracker=https://github.com/Verticalsrl/qgs-share/issues
+homepage=https://vertical-srl.it
 
 author=Vertical Srl
 email=supporto@vertical-srl.it

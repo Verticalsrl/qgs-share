@@ -11,7 +11,7 @@
    </rect>
   </property>
   <property name="windowTitle">
-   <string>Storico modifiche progetto</string>
+   <string>Project version history</string>
   </property>
   <property name="modal">
    <bool>false</bool>
@@ -29,7 +29,7 @@
     <item>
      <widget class="QLabel" name="label_listing_title">
       <property name="text">
-       <string>storico modifiche progetto</string>
+       <string>Project version history</string>
       </property>
      </widget>
     </item>
@@ -50,17 +50,17 @@
       </property>
       <column>
        <property name="text">
-        <string>titolo</string>
+        <string>Title</string>
        </property>
       </column>
       <column>
        <property name="text">
-        <string>autore</string>
+        <string>Author</string>
        </property>
       </column>
       <column>
        <property name="text">
-        <string>data</string>
+        <string>Date</string>
        </property>
       </column>
       <column>
@@ -98,7 +98,7 @@
       <item>
        <widget class="QPushButton" name="button_close">
         <property name="text">
-         <string>close</string>
+         <string>Close</string>
         </property>
        </widget>
       </item>

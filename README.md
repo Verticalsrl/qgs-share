@@ -1,71 +1,77 @@
 # Vertical Project Share
 
-Plugin QGIS per **condividere e versionare** i progetti QGIS archiviati su **PostgreSQL**.
+QGIS plugin to **version and share** QGIS projects stored in **PostgreSQL**.
 
-Quando un progetto è salvato nello storage nativo PostgreSQL di QGIS (tabella
-`qgis_projects`), più utenti possono lavorarci sopra. Questo plugin aggiunge uno
-**storico delle versioni** e una **notifica di disallineamento**, così le
-modifiche di un utente non vengono perse silenziosamente.
+When a project is saved in QGIS' native PostgreSQL project storage (the
+`qgis_projects` table), several people can work on it. This plugin adds a
+**version history** and a **out-of-sync notification** on top of it, so one
+user's changes are not silently lost.
 
-> ⚠️ Stato: `experimental`. Baseline Qt5 / QGIS 3.x. Il port a Qt6 / QGIS 4 e i
-> miglioramenti di logica del versionamento sono pianificati su branch separati
-> (vedi *Limitazioni note*).
+> ⚠️ Status: `experimental`. Single codebase compatible with **QGIS 3 (Qt5)**
+> and **QGIS 4 (Qt6)**.
 
-## Requisiti
+## Requirements
 
-- QGIS ≥ 3.22 (Qt5)
-- Un progetto QGIS salvato su **PostgreSQL** (storage `postgresql`)
-- Modulo Python `psycopg2` disponibile nell'ambiente Python di QGIS
+- QGIS ≥ 3.22 (also runs on QGIS 4 / Qt6)
+- A QGIS project stored in **PostgreSQL** (`postgresql` storage)
+- The `psycopg2` Python module available in the QGIS Python environment
 
-## Installazione
+## Installation
 
-Il plugin vero e proprio è la cartella `vertical_projectshare/`. Copiala nella
-directory dei plugin QGIS:
+The plugin itself is the `vertical_projectshare/` folder. Copy it into the QGIS
+plugins directory:
 
-| SO | Percorso |
-|----|----------|
+| OS | Path |
+|----|------|
 | Linux | `~/.local/share/QGIS/QGIS3/profiles/default/python/plugins/` |
 | Windows | `%APPDATA%\QGIS\QGIS3\profiles\default\python\plugins\` |
 | macOS | `~/Library/Application Support/QGIS/QGIS3/profiles/default/python/plugins/` |
 
-Poi riavvia QGIS (o *Plugin → Ricarica plugin*) e abilitalo da
-*Plugin → Gestisci e installa plugin*.
+Then restart QGIS (or *Plugins → Reload plugin*) and enable it from
+*Plugins → Manage and Install Plugins*.
 
-## Uso
+## Usage
 
-La barra degli strumenti **VerticalShare** espone:
+The **VerticalShare** toolbar exposes:
 
-| Comando | Funzione |
-|---------|----------|
-| Versionamento attivo | Attiva/disattiva il versionamento: a ogni salvataggio propone uno snapshot e controlla periodicamente il DB |
-| Lista snapshot | Apre lo storico delle versioni del progetto |
-| Ricarica versione aggiornata dal db | Ricarica dal DB l'ultima versione corrente |
-| Verifica aggiornamenti su db | Controlla subito se sul DB esiste una versione più recente |
-| Salva copia locale in QGZ | Esporta il progetto corrente in un file `.qgz` |
-| ℹ️ Informazioni | Mostra versione e istruzioni d'uso |
+| Command | What it does |
+|---------|--------------|
+| Save the project | Saves the project like the normal QGIS command; while versioning is on it also offers a snapshot |
+| Versioning on | Toggles versioning: while on, every save records a version and the plugin periodically checks the database |
+| Version history | Opens the project version history |
+| Reload the latest version from the database | Reloads the current version from the database |
+| Check the database for updates | Immediately checks for a newer version on the database |
+| Save a local copy as QGZ | Exports the current project to a `.qgz` file |
+| 🔔 Notification bell | Idle when up to date; red dot when a newer version exists on the database. Click to reload |
+| ℹ️ About | Shows version and usage instructions |
 
-Nella **finestra storico** ogni versione può essere *promossa* a copia corrente
-per tutti, *scaricata* come `.qgz`, oppure *eliminata*.
+In the **history window** each version can be *promoted* to the working copy
+for everyone, *downloaded* as a `.qgz`, or *deleted*.
 
-I comandi si attivano solo quando il progetto aperto è su PostgreSQL.
+Commands are enabled only when the open project is stored in PostgreSQL.
 
-## Struttura dati
+## How versioning works
 
-Il plugin crea, nello schema del progetto, la tabella
-`qgis_projects_share_history` con: nome progetto, contenuto (`BYTEA`), metadata,
-autore, data, note e checksum md5 di ogni snapshot.
+Versioning is a binary choice of the toggle: **while it is on, every save records
+a version** in the `qgis_projects_share_history` table (project name, content as
+`BYTEA`, metadata, author, time, optional notes, md5 checksum). The save dialog
+only collects optional notes — *Save with notes* or *Skip*; the version is
+recorded either way.
 
-## Limitazioni note
+## Known limitations
 
-Tracciate nelle issue del repository:
+Tracked in the repository issues:
 
-- Concorrenza solo *notificata*, non *prevenuta* (manca il controllo
-  ottimistico in scrittura).
-- Snapshot acquisito tramite polling del DB anziché dai byte salvati.
-- Confronto di stato sensibile a timestamp/autore oltre che al contenuto.
-- `promote` sovrascrive la copia viva senza archiviarla prima.
-- Compatibilità Qt6 / QGIS 4 non ancora implementata.
+- Concurrency is *notified*, not *prevented* (no optimistic check on write yet).
+- State comparison is sensitive to the timestamp/author in addition to content.
+- `promote` overwrites the working copy without archiving it first.
 
-## Licenza
+## Report a problem
+
+- Issues: https://github.com/Verticalsrl/qgs-share/issues
+- Email: supporto@vertical-srl.it
+- Web: https://vertical-srl.it
+
+## License
 
 Vertical Srl — https://vertical-srl.it
