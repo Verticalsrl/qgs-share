@@ -11,7 +11,7 @@
    </rect>
   </property>
   <property name="windowTitle">
-   <string>Crea Snapshot</string>
+   <string>Create snapshot</string>
   </property>
   <widget class="QWidget" name="verticalLayoutWidget">
    <property name="geometry">
@@ -31,7 +31,7 @@
       <item>
        <widget class="QLabel" name="label_changes">
         <property name="text">
-         <string>Descrizione modifiche</string>
+         <string>Change description</string>
         </property>
        </widget>
       </item>
@@ -49,7 +49,7 @@
       <item row="0" column="0">
        <widget class="QLabel" name="label">
         <property name="text">
-         <string>TItolo</string>
+         <string>Title</string>
         </property>
        </widget>
       </item>
@@ -59,7 +59,7 @@
       <item row="1" column="0">
        <widget class="QLabel" name="label_2">
         <property name="text">
-         <string>Note</string>
+         <string>Notes</string>
         </property>
        </widget>
       </item>
@@ -86,14 +86,14 @@
       <item>
        <widget class="QPushButton" name="button_cancel">
         <property name="text">
-         <string>ignora</string>
+         <string>Skip</string>
         </property>
        </widget>
       </item>
       <item>
        <widget class="QPushButton" name="button_confirm">
         <property name="text">
-         <string>salva</string>
+         <string>Save</string>
         </property>
        </widget>
       </item>

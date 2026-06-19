@@ -6,7 +6,7 @@ import psycopg2
 import psycopg2.extras
 from psycopg2 import sql
 from psycopg2.sql import SQL, Composed
-from qgis._core import QgsAbstractDatabaseProviderConnection, QgsDataSourceUri
+from qgis.core import QgsAbstractDatabaseProviderConnection, QgsDataSourceUri
 
 T = TypeVar("T")
 

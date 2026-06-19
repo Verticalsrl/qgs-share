@@ -1,11 +1,14 @@
 import os
 import time
 
-from PyQt5.QtCore import QObject, pyqtSignal, pyqtSlot, QThread
-from PyQt5.QtGui import QIcon
-from PyQt5.QtWidgets import QToolBar, QWidget, QAction, QCheckBox, QLabel, QMenu, QPushButton, QFileDialog, QDialog, QVBoxLayout, QTextBrowser, QDialogButtonBox
-from qgis._core import QgsApplication, QgsProject, Qgis
-from qgis._gui import QgisInterface, QgsGui, QgsMessageBar
+# Qt5/Qt6 compatible: qgis.PyQt re-exports PyQt5 on QGIS 3 (Qt5) and PyQt6 on QGIS 4 (Qt6);
+# qgis.core/qgis.gui are the public API (not the private qgis._core/_gui). Same code, both versions.
+from qgis.PyQt.QtCore import QObject, pyqtSignal, pyqtSlot, QThread
+from qgis.PyQt.QtGui import QIcon
+# note: QAction is NOT imported here on purpose -> in Qt6 it lives in QtGui, not QtWidgets
+from qgis.PyQt.QtWidgets import QToolBar, QWidget, QCheckBox, QLabel, QMenu, QPushButton, QFileDialog, QDialog, QVBoxLayout, QTextBrowser, QDialogButtonBox, QMessageBox
+from qgis.core import QgsApplication, QgsProject, Qgis
+from qgis.gui import QgisInterface, QgsGui, QgsMessageBar
 
 from .constants import PLUGIN_TITLE, PLUGIN_VERSION, icon_path, to_local_time
 from .project_connector import DbProjectConnector
@@ -50,20 +53,16 @@ class PluginRunner (SnapShooterListener):
 		self.toolbar = self.iface.addToolBar(self.menuId)
 		self.toolbar.setObjectName(self.menuId)
 
-		bartitle = QLabel()
-		bartitle.setText("VerticalShare  ")
-		self.toolbar.addWidget(bartitle)
-
 		self.button_save = QPushButton()
 		self.button_save.setObjectName("BUTTON_SAVE")
 		self.button_save.setIcon(QIcon(icon_path("save.svg")))
 		self.button_save.setFlat(True)
-		self.button_save.setToolTip("Salva il progetto")
+		self.button_save.setToolTip("Save the project")
 		self.button_save.clicked.connect(self.on_save_request)
 		self.toolbar.addWidget(self.button_save)
 
 		self.control_toggle_versioning = QCheckBox()
-		self.control_toggle_versioning.setText("versionamento attivo")
+		self.control_toggle_versioning.setText("versioning on")
 		self.control_toggle_versioning.setIcon(QIcon(icon_path("versioning.svg")))
 		self.toolbar.addWidget(self.control_toggle_versioning)
 		self.control_toggle_versioning.clicked.connect(self.toggle_project_versioning)
@@ -73,7 +72,7 @@ class PluginRunner (SnapShooterListener):
 		history_icon = QIcon(icon_path("history.svg"))
 		self.button_project_history.setIcon(history_icon)
 		self.button_project_history.setFlat(True)
-		self.button_project_history.setToolTip("Lista snapshot")
+		self.button_project_history.setToolTip("Version history")
 		self.button_project_history.clicked.connect(self.open_history_dialog)
 		self.toolbar.addWidget(self.button_project_history)
 
@@ -82,7 +81,7 @@ class PluginRunner (SnapShooterListener):
 		self.button_sync.setObjectName("BUTTON_SYNC")
 		self.button_sync.setIcon(QIcon(icon_path("sync.svg")))
 		self.button_sync.setFlat(True)
-		self.button_sync.setToolTip("Ricarica versione aggiornata dal db")
+		self.button_sync.setToolTip("Reload the latest version from the database")
 		self.button_sync.clicked.connect(self.reload_project_from_db)
 		self.toolbar.addWidget(self.button_sync)
 
@@ -90,7 +89,7 @@ class PluginRunner (SnapShooterListener):
 		self.button_check_updates.setObjectName("BUTTON_CHECKUPDATES")
 		self.button_check_updates.setIcon(QIcon(icon_path("check_updates.svg")))
 		self.button_check_updates.setFlat(True)
-		self.button_check_updates.setToolTip("Verifica aggiornamenti su db")
+		self.button_check_updates.setToolTip("Check the database for updates")
 		self.button_check_updates.clicked.connect(self.check_updates_manually)
 		self.toolbar.addWidget(self.button_check_updates)
 
@@ -99,23 +98,16 @@ class PluginRunner (SnapShooterListener):
 		self.button_project_quickdump = QPushButton()
 		self.button_project_quickdump.setObjectName("BUTTON_QUICKDUMP")
 		self.button_project_quickdump.setFlat(True)
-		self.button_project_quickdump.setToolTip("Salva copia locale in QGZ")
+		self.button_project_quickdump.setToolTip("Save a local copy as QGZ")
 		self.button_project_quickdump.setIcon(QIcon(icon_path("save_local.svg")))
 		self.button_project_quickdump.clicked.connect(self.on_project_dump_request)
 		self.toolbar.addWidget(self.button_project_quickdump)
-
-		self.button_info = QPushButton()
-		self.button_info.setObjectName("BUTTON_INFO")
-		self.button_info.setIcon(QIcon(icon_path("info.svg")))
-		self.button_info.setFlat(True)
-		self.button_info.setToolTip("Informazioni e istruzioni d'uso")
-		self.button_info.clicked.connect(self.open_info_dialog)
-		self.toolbar.addWidget(self.button_info)
 
 		# always-visible notification bell: idle (grey) when aligned, alert (red dot)
 		# when the db holds a newer version. Click reloads when alerting, otherwise
 		# checks the db right away.
 		self.out_of_sync = False
+		self.out_of_sync_state = None
 		self.button_notify = QPushButton()
 		self.button_notify.setObjectName("BUTTON_NOTIFY")
 		self.button_notify.setIcon(QIcon(icon_path("bell.svg")))
@@ -124,6 +116,15 @@ class PluginRunner (SnapShooterListener):
 		self.toolbar.addWidget(self.button_notify)
 		# note: the bell state is initialised by setActiveStates() below, once
 		# flag_versioning_on exists
+
+		# info button kept last in the toolbar
+		self.button_info = QPushButton()
+		self.button_info.setObjectName("BUTTON_INFO")
+		self.button_info.setIcon(QIcon(icon_path("info.svg")))
+		self.button_info.setFlat(True)
+		self.button_info.setToolTip("About and usage instructions")
+		self.button_info.clicked.connect(self.open_info_dialog)
+		self.toolbar.addWidget(self.button_info)
 
 		self.iface.addToolBar(self.toolbar)
 
@@ -176,7 +177,7 @@ class PluginRunner (SnapShooterListener):
 			self.clear_out_of_sync()
 
 	def desync_description (self, state: ProjectUpdateState):
-		author = state.get("last_author") or "un altro utente"
+		author = state.get("last_author") or "another user"
 		when = to_local_time(state["last_updated"]).strftime("%H:%M") if state.get("last_updated") else "?"
 		return author, when
 
@@ -187,40 +188,56 @@ class PluginRunner (SnapShooterListener):
 		else:
 			self.button_notify.setIcon(QIcon(icon_path("bell.svg")))
 			if self.flag_versioning_on:
-				self.button_notify.setToolTip("Sei allineato all'ultima versione. Clicca per verificare ora.")
+				self.button_notify.setToolTip("You are on the latest version. Click to check now.")
 			else:
-				self.button_notify.setToolTip("Attiva il versionamento per ricevere le notifiche di nuove versioni.")
+				self.button_notify.setToolTip("Enable versioning to be notified of new versions.")
 
 	def show_out_of_sync (self, state: ProjectUpdateState):
 		"""idempotent indicator: the bell stays in 'alert' until realignment,
 		while the message bar heads-up fires only once per distinct new version"""
 		author, when = self.desync_description(state)
 		self.out_of_sync = True
+		self.out_of_sync_state = state
 		self.button_notify.setIcon(QIcon(icon_path("bell_alert.svg")))
 		self.button_notify.setToolTip(
-			"Nuova versione disponibile (aggiornata da %s alle %s). Clicca per ricaricare dal db." % (author, when))
+			"A newer version is available (saved by %s at %s). Click for details." % (author, when))
 		# one-shot heads-up only when this specific new version was not announced yet
 		if self.desync_notified != state:
-			message = "Aggiornata da %s alle %s. Ricarica per allinearti." % (author, when)
-			widget = self.iface.messageBar().createMessage("Progetto aggiornato su db", message)
-			self.iface.messageBar().pushWidget(widget, level=Qgis.Warning)
+			message = "Saved by %s at %s. Reload to sync." % (author, when)
+			widget = self.iface.messageBar().createMessage("Project updated on the database", message)
+			self.iface.messageBar().pushWidget(widget, level=Qgis.MessageLevel.Warning)
 			self.desync_notified = state
 
 	def clear_out_of_sync (self):
 		self.out_of_sync = False
+		self.out_of_sync_state = None
 		self.desync_notified = None
 		self.update_notify_ui()
 
 	def on_notify_clicked (self):
-		if self.out_of_sync:
-			self.reload_project_from_db()
-			return
-		if self.flag_versioning_on and self.snapper is not None:
+		# clicking the bell never reloads on its own: it opens a dialog and lets
+		# the user decide whether to reload
+		if self.out_of_sync and self.out_of_sync_state is not None:
+			author, when = self.desync_description(self.out_of_sync_state)
+			msgBox = QMessageBox(self.iface.mainWindow())
+			msgBox.setIcon(QMessageBox.Icon.Warning)
+			msgBox.setWindowTitle("Newer version available")
+			msgBox.setText("A newer version of this project is available on the database.")
+			msgBox.setInformativeText(
+				"Saved by %s at %s.\n\nDo you want to reload it now? Any unsaved local change will be replaced." % (author, when))
+			reload_btn = msgBox.addButton("Reload now", QMessageBox.ButtonRole.AcceptRole)
+			msgBox.addButton("Later", QMessageBox.ButtonRole.RejectRole)
+			msgBox.exec()
+			if msgBox.clickedButton() == reload_btn:
+				self.reload_project_from_db()
+		elif self.flag_versioning_on and self.snapper is not None:
 			self.check_updates_manually()
 			if not self.out_of_sync:
-				self.iface.messageBar().pushMessage("Nessuna nuova versione: sei allineato all'ultima.", level=Qgis.Info)
+				QMessageBox.information(self.iface.mainWindow(), "Up to date",
+					"You are on the latest version: no newer version on the database.")
 		else:
-			self.iface.messageBar().pushMessage("Attiva il versionamento per ricevere le notifiche.", level=Qgis.Info)
+			QMessageBox.information(self.iface.mainWindow(), "Versioning off",
+				"Enable versioning to be notified of new versions.")
 
 	def reload_project_from_db(self):
 		was_tracking = self.flag_versioning_on
@@ -228,7 +245,7 @@ class PluginRunner (SnapShooterListener):
 		QgsProject.instance().read()
 		self.align_update_state()
 		self.clear_out_of_sync()
-		self.iface.messageBar().pushMessage("Caricata ultima versione aggiornata dal db principale")
+		self.iface.messageBar().pushMessage("Loaded the latest version from the main database")
 		if was_tracking:
 			self.control_toggle_versioning.setChecked(True)
 			self.enable_project_versioning()
@@ -245,20 +262,20 @@ class PluginRunner (SnapShooterListener):
 
 	def on_project_dump_request(self):
 		dialog = QFileDialog()
-		dialog.setFileMode(QFileDialog.AnyFile)
-		dialog.setViewMode(QFileDialog.Detail)
+		dialog.setFileMode(QFileDialog.FileMode.AnyFile)
+		dialog.setViewMode(QFileDialog.ViewMode.Detail)
 		dialog.setDefaultSuffix("qgz")
 		dialog.setNameFilter("Qgis compressed project (*.qgz)")
-		dialog.setAcceptMode(QFileDialog.AcceptSave)
-		if dialog.exec_():
+		dialog.setAcceptMode(QFileDialog.AcceptMode.AcceptSave)
+		if dialog.exec():
 			try:
 				selection = dialog.selectedFiles()
 				if selection is not None and len(selection) == 1:
 					dest_path = selection[0]
 					self.dump_project_copy_to(dest_path)
-					self.iface.messageBar().pushMessage("Modifica salvata localmente su : " + str(dest_path), level=Qgis.Success)
+					self.iface.messageBar().pushMessage("Project saved locally to: " + str(dest_path), level=Qgis.MessageLevel.Success)
 			except Exception as ex:
-				self.iface.messageBar().pushMessage("Salvataggio fallito: " + str(ex), level=Qgis.Critical)
+				self.iface.messageBar().pushMessage("Save failed: " + str(ex), level=Qgis.MessageLevel.Critical)
 
 	def on_project_changing(self):
 		print("project set to dirty -- straight")
@@ -268,16 +285,16 @@ class PluginRunner (SnapShooterListener):
 		try:
 			QgsProject.instance().read()
 			self.align_update_state()
-			self.iface.messageBar().pushMessage("Progetto aggiornato da snapshot", level=Qgis.Info)
+			self.iface.messageBar().pushMessage("Project updated from snapshot", level=Qgis.MessageLevel.Info)
 		except Exception as ex:
-			self.iface.messageBar().pushMessage("Errore nell'aggiornamento del progetto: " + str(ex), level=Qgis.Critical)
+			self.iface.messageBar().pushMessage("Error while updating the project: " + str(ex), level=Qgis.MessageLevel.Critical)
 
 	def open_history_dialog(self):
 		print("showing history")
 		dialog = ProjectHistoryDialog(QgsProject.instance().fileName())
 		dialog.promoted_snapshot.connect(self.on_snapshot_promoted)
 		dialog.show()
-		dialog.exec_()
+		dialog.exec()
 
 		# we get no feedback, it's all handled in the dialog
 
@@ -286,50 +303,53 @@ class PluginRunner (SnapShooterListener):
 	def build_info_html(self) -> str:
 		return """
 			<h2>{title}</h2>
-			<p><b>Versione:</b> {version}<br>
-			<b>Autore:</b> Vertical Srl &mdash; <a href="https://vertical-srl.it">vertical-srl.it</a></p>
-			<p>Condivide e versiona i progetti QGIS salvati su PostgreSQL: ogni
-			salvataggio pu&ograve; essere registrato come snapshot nello storico,
-			cos&igrave; pi&ugrave; utenti possono lavorare sullo stesso progetto
-			senza sovrascriversi a vicenda.</p>
-			<h3>Barra degli strumenti</h3>
+			<p><b>Version:</b> {version}<br>
+			<b>Author:</b> Vertical Srl &mdash; <a href="https://vertical-srl.it">vertical-srl.it</a></p>
+			<p>Shares and versions QGIS projects stored in PostgreSQL: every save can
+			be recorded as a snapshot in the history, so multiple users can work on the
+			same project without silently overwriting each other.</p>
+			<h3>Toolbar</h3>
 			<ul>
-				<li><b>Salva il progetto</b>: salva il progetto come il normale comando
-				di QGIS; con il versionamento attivo propone anche lo snapshot.</li>
-				<li><b>Campanella notifiche</b>: sempre visibile. Spenta quando sei
-				allineato; con il <b>pallino rosso</b> quando sul database esiste una
-				versione pi&ugrave; recente di quella aperta. Cliccala per ricaricare e
-				allinearti (o, se sei gi&agrave; allineato, per verificare subito sul db).</li>
-				<li><b>Versionamento attivo</b>: quando attivo, a ogni salvataggio
-				il plugin propone di registrare una nuova versione nello storico
-				e controlla periodicamente se altri hanno aggiornato il progetto sul db.</li>
-				<li><b>Lista snapshot</b>: apre lo storico delle versioni del progetto,
-				da cui &egrave; possibile promuovere, scaricare o eliminare una versione.</li>
-				<li><b>Ricarica versione aggiornata dal db</b>: ricarica dal database
-				l'ultima versione corrente del progetto.</li>
-				<li><b>Verifica aggiornamenti su db</b>: controlla subito se sul
-				database esiste una versione pi&ugrave; recente di quella aperta.</li>
-				<li><b>Salva copia locale in QGZ</b>: esporta una copia del progetto
-				corrente in un file <code>.qgz</code> sul disco.</li>
-				<li><b>Informazioni</b>: questa finestra.</li>
+				<li><b>Save the project</b>: saves the project like the normal QGIS
+				command; while versioning is on it also offers to record a snapshot.</li>
+				<li><b>Notification bell</b>: always visible. Idle when you are up to
+				date; shows a <b>red dot</b> when the database holds a version newer than
+				the one you have open. Click it to see the details and choose whether to
+				reload (it never reloads on its own).</li>
+				<li><b>Versioning on</b>: while enabled, every save records a new version
+				in the history and the plugin periodically checks whether someone else has
+				updated the project on the database.</li>
+				<li><b>Version history</b>: opens the project version history, where you
+				can promote, download or delete a version.</li>
+				<li><b>Reload the latest version from the database</b>: reloads the current
+				version of the project from the database.</li>
+				<li><b>Check the database for updates</b>: immediately checks whether the
+				database holds a version newer than the one you have open.</li>
+				<li><b>Save a local copy as QGZ</b>: exports a copy of the current project
+				to a <code>.qgz</code> file on disk.</li>
+				<li><b>About</b>: this window.</li>
 			</ul>
-			<h3>Finestra storico</h3>
+			<h3>History window</h3>
 			<ul>
-				<li><b>Promuovi a working copy</b>: rende la versione selezionata
-				quella corrente per tutti gli utenti.</li>
-				<li><b>Salva snapshot su disco</b>: esporta la versione selezionata
-				come file <code>.qgz</code>.</li>
-				<li><b>Elimina</b>: rimuove la versione selezionata dallo storico.</li>
+				<li><b>Promote to working copy</b>: makes the selected version the current
+				one for all users.</li>
+				<li><b>Save snapshot to disk</b>: exports the selected version as a
+				<code>.qgz</code> file.</li>
+				<li><b>Delete</b>: removes the selected version from the history.</li>
 			</ul>
-			<h3>Requisiti</h3>
-			<p>Il plugin si attiva solo quando il progetto aperto &egrave; archiviato
-			su PostgreSQL (storage <i>postgresql</i>). Con progetti su file i comandi
-			restano disabilitati.</p>
+			<h3>Requirements</h3>
+			<p>The plugin is active only when the open project is stored in PostgreSQL
+			(<i>postgresql</i> storage). With file-based projects the commands stay
+			disabled.</p>
+			<h3>Report a problem</h3>
+			<p>Found a bug or have a request? Contact Vertical:<br>
+			&#9993; <a href="mailto:supporto@vertical-srl.it">supporto@vertical-srl.it</a><br>
+			&#127760; <a href="https://vertical-srl.it">vertical-srl.it</a></p>
 		""".format(title=PLUGIN_TITLE, version=PLUGIN_VERSION)
 
 	def open_info_dialog(self):
 		dialog = QDialog(self.iface.mainWindow())
-		dialog.setWindowTitle("%s - Informazioni" % PLUGIN_TITLE)
+		dialog.setWindowTitle("%s - About" % PLUGIN_TITLE)
 		dialog.setWindowIcon(QIcon(icon_path("info.svg")))
 		dialog.resize(560, 600)
 
@@ -339,12 +359,12 @@ class PluginRunner (SnapShooterListener):
 		browser.setHtml(self.build_info_html())
 		layout.addWidget(browser)
 
-		buttons = QDialogButtonBox(QDialogButtonBox.Close)
+		buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Close)
 		buttons.rejected.connect(dialog.close)
 		buttons.accepted.connect(dialog.close)
 		layout.addWidget(buttons)
 
-		dialog.exec_()
+		dialog.exec()
 
 	def prompt_add_version_to_history (self, version_state: ProjectUpdateState):
 		self.latest_state = version_state
@@ -371,11 +391,14 @@ class PluginRunner (SnapShooterListener):
 		self.clear_savesync_thread_and_worker()
 
 	def on_save_mode_sync_fail(self, ts: float, elapsed: float):
-		self.iface.messageBar().pushMessage("Verifica allineamento db fallita dopo %d secondi, ricaricare il progetto" % (elapsed,), level=Qgis.Critical)
+		self.iface.messageBar().pushMessage("Database sync check failed after %d seconds, please reload the project" % (elapsed,), level=Qgis.MessageLevel.Critical)
 		self.flag_savesyncmode = False
 		self.clear_savesync_thread_and_worker()
 
 	def sync_update_state (self):
+		# DEPRECATED: the old save flow waited on this background watcher to detect
+		# the db change before prompting. Now on_project_save versions directly, so
+		# this is no longer wired up (kept for reference / possible reuse).
 		if not self.flag_savesyncmode:
 			self.flag_savesyncmode = True
 			self.savesync_thread = QThread()
@@ -435,8 +458,15 @@ class PluginRunner (SnapShooterListener):
 		print("project saved signal fired")
 		self.setActiveStates()
 		print("verified plugin state (e.g. project storage change)")
-		if self.isPostgresProject():
-			self.sync_update_state()
+		if not self.isPostgresProject():
+			return
+		# versioning is a binary choice of the toggle: while it is ON, every save
+		# records a version. The only optional thing is the notes.
+		if self.flag_versioning_on:
+			self.on_versionable_save()
+		# realign to the just-saved state so our own save does not light the bell
+		self.align_update_state()
+		self.clear_out_of_sync()
 
 	def setActiveStates (self):
 
@@ -514,45 +544,30 @@ class PluginRunner (SnapShooterListener):
 			self.snapper.end_watch()
 
 
-	def changes_are_versionable (self)-> bool:
-
-		versionable_uri = QgsProject.instance().fileName()
-		shooter = VerticalShareSnapper.get_for(versionable_uri)
-		if not shooter.has_schema_tables():
-			return True
-		else:
-			return self.versionable_changes_left
-			# live_checksum = shooter.get_live_project_hash()
-			# snapshot_checksum = shooter.get_latest_snaphost_hash()
-			# print("checksums: live %s snapped %s SAME? %s" % (live_checksum, snapshot_checksum, str(live_checksum == snapshot_checksum)))
-			# return live_checksum != snapshot_checksum
-
 	def on_versionable_save(self):
-		# note that we ALREADY aligned working state in on_project_save
-		if not self.changes_are_versionable():
-			print("no actual changes to save")
-			return
+		# versioning is ON, so we ALWAYS record a version here; the dialog only
+		# collects optional notes (Conferma = with notes, Salta = without)
 		versionable_uri = QgsProject.instance().fileName()
 		print("versioning for ", versionable_uri)
-		dialog = SnapshotSaveDialog()
 		shooter = VerticalShareSnapper.get_for(versionable_uri)
-		dialog.label_changes.setText("Modifiche di %s a %s" % (shooter.parsed_uri.username, shooter.parsed_uri.project))
+
+		dialog = SnapshotSaveDialog()
+		dialog.label_changes.setText("Changes by %s to %s" % (shooter.parsed_uri.username, shooter.parsed_uri.project))
 		dialog.show()
-		if dialog.exec_():
-			print ("dialog confirmed")
+		if dialog.exec():
 			changename = dialog.field_snapshot_title.text()
 			changenotes = dialog.field_snapshot_notes.toPlainText()
+		else:
+			# skipped: version saved anyway, just without user notes
+			changename = ""
+			changenotes = ""
+
+		try:
 			shooter.save_project_snapshot(changename, changenotes)
 			self.versionable_changes_left = False
-			msg = "modifiche al progetto salvate nello storico"
-			sev = Qgis.Success
-		else:
-			print("dialog canceled")
-			self.versionable_changes_left = True
-			msg = "modifiche al progetto non salvate nello storico"
-			sev = Qgis.Warning
-
-		self.iface.messageBar().pushMessage(msg, level=sev)
+			self.iface.messageBar().pushMessage("Version saved to history", level=Qgis.MessageLevel.Success)
+		except Exception as ex:
+			self.iface.messageBar().pushMessage("Failed to save the version: " + str(ex), level=Qgis.MessageLevel.Critical)
 
 
 	def initToolbar (self):
