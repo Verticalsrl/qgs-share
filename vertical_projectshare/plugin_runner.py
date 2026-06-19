@@ -6,7 +6,7 @@ import time
 from qgis.PyQt.QtCore import QObject, pyqtSignal, pyqtSlot, QThread
 from qgis.PyQt.QtGui import QIcon
 # note: QAction is NOT imported here on purpose -> in Qt6 it lives in QtGui, not QtWidgets
-from qgis.PyQt.QtWidgets import QToolBar, QWidget, QCheckBox, QLabel, QMenu, QPushButton, QFileDialog, QDialog, QVBoxLayout, QTextBrowser, QDialogButtonBox
+from qgis.PyQt.QtWidgets import QToolBar, QWidget, QCheckBox, QLabel, QMenu, QPushButton, QFileDialog, QDialog, QVBoxLayout, QTextBrowser, QDialogButtonBox, QMessageBox
 from qgis.core import QgsApplication, QgsProject, Qgis
 from qgis.gui import QgisInterface, QgsGui, QgsMessageBar
 
@@ -52,10 +52,6 @@ class PluginRunner (SnapShooterListener):
 
 		self.toolbar = self.iface.addToolBar(self.menuId)
 		self.toolbar.setObjectName(self.menuId)
-
-		bartitle = QLabel()
-		bartitle.setText("VerticalShare  ")
-		self.toolbar.addWidget(bartitle)
 
 		self.button_save = QPushButton()
 		self.button_save.setObjectName("BUTTON_SAVE")
@@ -111,6 +107,7 @@ class PluginRunner (SnapShooterListener):
 		# when the db holds a newer version. Click reloads when alerting, otherwise
 		# checks the db right away.
 		self.out_of_sync = False
+		self.out_of_sync_state = None
 		self.button_notify = QPushButton()
 		self.button_notify.setObjectName("BUTTON_NOTIFY")
 		self.button_notify.setIcon(QIcon(icon_path("bell.svg")))
@@ -200,9 +197,10 @@ class PluginRunner (SnapShooterListener):
 		while the message bar heads-up fires only once per distinct new version"""
 		author, when = self.desync_description(state)
 		self.out_of_sync = True
+		self.out_of_sync_state = state
 		self.button_notify.setIcon(QIcon(icon_path("bell_alert.svg")))
 		self.button_notify.setToolTip(
-			"A newer version is available (saved by %s at %s). Click to reload from the database." % (author, when))
+			"A newer version is available (saved by %s at %s). Click for details." % (author, when))
 		# one-shot heads-up only when this specific new version was not announced yet
 		if self.desync_notified != state:
 			message = "Saved by %s at %s. Reload to sync." % (author, when)
@@ -212,19 +210,34 @@ class PluginRunner (SnapShooterListener):
 
 	def clear_out_of_sync (self):
 		self.out_of_sync = False
+		self.out_of_sync_state = None
 		self.desync_notified = None
 		self.update_notify_ui()
 
 	def on_notify_clicked (self):
-		if self.out_of_sync:
-			self.reload_project_from_db()
-			return
-		if self.flag_versioning_on and self.snapper is not None:
+		# clicking the bell never reloads on its own: it opens a dialog and lets
+		# the user decide whether to reload
+		if self.out_of_sync and self.out_of_sync_state is not None:
+			author, when = self.desync_description(self.out_of_sync_state)
+			msgBox = QMessageBox(self.iface.mainWindow())
+			msgBox.setIcon(QMessageBox.Icon.Warning)
+			msgBox.setWindowTitle("Newer version available")
+			msgBox.setText("A newer version of this project is available on the database.")
+			msgBox.setInformativeText(
+				"Saved by %s at %s.\n\nDo you want to reload it now? Any unsaved local change will be replaced." % (author, when))
+			reload_btn = msgBox.addButton("Reload now", QMessageBox.ButtonRole.AcceptRole)
+			msgBox.addButton("Later", QMessageBox.ButtonRole.RejectRole)
+			msgBox.exec()
+			if msgBox.clickedButton() == reload_btn:
+				self.reload_project_from_db()
+		elif self.flag_versioning_on and self.snapper is not None:
 			self.check_updates_manually()
 			if not self.out_of_sync:
-				self.iface.messageBar().pushMessage("No new version: you are up to date.", level=Qgis.MessageLevel.Info)
+				QMessageBox.information(self.iface.mainWindow(), "Up to date",
+					"You are on the latest version: no newer version on the database.")
 		else:
-			self.iface.messageBar().pushMessage("Enable versioning to receive notifications.", level=Qgis.MessageLevel.Info)
+			QMessageBox.information(self.iface.mainWindow(), "Versioning off",
+				"Enable versioning to be notified of new versions.")
 
 	def reload_project_from_db(self):
 		was_tracking = self.flag_versioning_on
@@ -301,8 +314,8 @@ class PluginRunner (SnapShooterListener):
 				command; while versioning is on it also offers to record a snapshot.</li>
 				<li><b>Notification bell</b>: always visible. Idle when you are up to
 				date; shows a <b>red dot</b> when the database holds a version newer than
-				the one you have open. Click it to reload and sync (or, when already up to
-				date, to check the database right away).</li>
+				the one you have open. Click it to see the details and choose whether to
+				reload (it never reloads on its own).</li>
 				<li><b>Versioning on</b>: while enabled, every save records a new version
 				in the history and the plugin periodically checks whether someone else has
 				updated the project on the database.</li>
