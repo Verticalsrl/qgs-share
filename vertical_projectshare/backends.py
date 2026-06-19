@@ -237,15 +237,31 @@ class GeoPackageBackend(ProjectBackend):
 
 	@staticmethod
 	def _parse_gpkg_uri(uri: str):
-		# e.g. geopackage:/path/to/file.gpkg?projectName=Foo  (Windows: geopackage:C:/...)
+		# QGIS project URIs look like:
+		#   geopackage:/home/me/data.gpkg?projectName=Foo       (Linux/macOS)
+		#   geopackage:C:/Users/me/data.gpkg?projectName=Foo    (Windows)
+		#   geopackage:/C:/Users/me/data.gpkg?projectName=Foo   (Windows, leading slash)
 		body = uri.split(":", 1)[1] if ":" in uri else uri
-		path, _, query = body.partition("?")
+		raw_path, _, query = body.partition("?")
+		path = urllib.parse.unquote(raw_path)
+		# strip a leading slash placed before a Windows drive letter ("/C:/..." -> "C:/...")
+		if len(path) >= 3 and path[0] == "/" and path[1].isalpha() and path[2] == ":":
+			path = path[1:]
 		params = urllib.parse.parse_qs(query)
 		project = (params.get("projectName") or params.get("project") or [None])[0]
+		print("VerticalShare GeoPackage URI:", repr(uri), "-> path:", repr(path), "project:", repr(project))
 		return path, project
 
 	def _conn(self):
-		return sqlite3.connect(self.path)
+		# timeout lets writes wait if QGIS (or another session) holds the gpkg lock,
+		# instead of failing immediately with "database is locked"
+		try:
+			conn = sqlite3.connect(self.path, timeout=30)
+			conn.execute("PRAGMA busy_timeout = 30000")
+			return conn
+		except sqlite3.Error as ex:
+			raise RuntimeError(
+				"Cannot open the GeoPackage at '%s' (parsed from the project URI): %s" % (self.path, ex))
 
 	def get_project_update_state(self):
 		with closing(self._conn()) as conn:
