@@ -305,9 +305,9 @@ class PluginRunner (SnapShooterListener):
 			<h2>{title}</h2>
 			<p><b>Version:</b> {version}<br>
 			<b>Author:</b> Vertical Srl &mdash; <a href="https://vertical-srl.it">vertical-srl.it</a></p>
-			<p>Shares and versions QGIS projects stored in PostgreSQL: every save can
-			be recorded as a snapshot in the history, so multiple users can work on the
-			same project without silently overwriting each other.</p>
+			<p>Shares and versions QGIS projects stored in PostgreSQL or in a GeoPackage:
+			every save can be recorded as a snapshot in the history, so multiple users can
+			work on the same project without silently overwriting each other.</p>
 			<h3>Toolbar</h3>
 			<ul>
 				<li><b>Save the project</b>: saves the project like the normal QGIS
@@ -338,8 +338,8 @@ class PluginRunner (SnapShooterListener):
 				<li><b>Delete</b>: removes the selected version from the history.</li>
 			</ul>
 			<h3>Requirements</h3>
-			<p>The plugin is active only when the open project is stored in PostgreSQL
-			(<i>postgresql</i> storage). With file-based projects the commands stay
+			<p>The plugin is active when the open project is stored in <b>PostgreSQL</b>
+			or in a <b>GeoPackage</b>. With plain file projects the commands stay
 			disabled.</p>
 			<h3>Report a problem</h3>
 			<p>Found a bug or have a request? Contact Vertical:<br>
@@ -417,10 +417,16 @@ class PluginRunner (SnapShooterListener):
 		self.latest_state = {**db_state}
 		print("aligned state to ", self.latest_state)
 
-	def isPostgresProject (self):
+	# project storages the plugin can version
+	SUPPORTED_STORAGES = ("postgresql", "geopackage")
+
+	def current_storage_type (self):
 		projectstorage = QgsProject.instance().projectStorage()
-		storagetype = projectstorage.type() if projectstorage is not None else None
-		return storagetype == "postgresql"
+		return projectstorage.type() if projectstorage is not None else None
+
+	def isPostgresProject (self):
+		# kept name for compatibility: true for any supported storage (PostgreSQL or GeoPackage)
+		return self.current_storage_type() in self.SUPPORTED_STORAGES
 
 	def on_project_load(self):
 		print("loaded project signal fired")
@@ -474,7 +480,7 @@ class PluginRunner (SnapShooterListener):
 		storagetype = projectstorage.type() if projectstorage is not None else None
 		print("storage type is now : ", storagetype, "flag versioning on ", self.flag_versioning_on)
 
-		plugin_enabled = storagetype == "postgresql"
+		plugin_enabled = storagetype in self.SUPPORTED_STORAGES
 		if not plugin_enabled:
 			self.flag_versioning_on = False
 			print("disabled plugin and flag is off")

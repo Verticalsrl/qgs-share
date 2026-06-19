@@ -1,16 +1,14 @@
 import time
 from abc import ABC
-from contextlib import closing
-from typing import Dict, TypedDict, NamedTuple, Optional
+from types import SimpleNamespace
+from typing import Dict, TypedDict
 import datetime
 
 # qgis.PyQt re-exports PyQt5 on QGIS 3 (Qt5) and PyQt6 on QGIS 4 (Qt6): same code, both versions
 from qgis.PyQt.QtCore import QObject, pyqtSlot, pyqtSignal, QThread
-import psycopg2
-from psycopg2 import sql
 
-from .project_connector import ProjectUpdateState, DbProjectConnector
-from .constants import TABLE_VERTICAL_SHARE, TABLE_PROJECTS_QGIS
+from .project_connector import ProjectUpdateState
+from .backends import make_backend
 
 
 
@@ -32,6 +30,9 @@ class SnapShooterListener (ABC):
 
 
 class VerticalShareSnapper:
+	"""storage-agnostic versioning facade: keeps the polling thread and exposes
+	the same API as before, delegating every DB operation to a backend
+	(PostgreSQL or GeoPackage) chosen from the project URI."""
 
 	INSTANCES: Dict[str, "VerticalShareSnapper"] = {}
 
@@ -42,151 +43,46 @@ class VerticalShareSnapper:
 		return VerticalShareSnapper.INSTANCES[uri]
 
 	def __init__(self, uri: str):
-		self.project_connector = DbProjectConnector(uri)
-		# self.connector = PgConnector.get_conn(self.project_connector.parsed_uri.connstr)
-		# kinda redundant but we can keep the old code as is until we optimize a bit
-		self.parsed_uri = self.project_connector.parsed_uri
-		self.connector = self.project_connector.pgconn
+		self.backend = make_backend(uri)
+		# kept for the dialog labels (project name / author) regardless of backend
+		self.parsed_uri = SimpleNamespace(project=self.backend.project, username=self.backend.username)
 
 		self.watcher_worker: ProjectStatePollerWorker = None
 		self.watcher_thread: QThread = None
 
 		self.listener: SnapShooterListener = None
 
-	def get_conn(self):
-		return psycopg2.connect(self.connector.connstr)
+	# --- versioning operations (delegated to the backend) ------------------ #
 
 	def get_live_project_update_state (self):
-		return self.project_connector.get_project_update_state()
+		return self.backend.get_project_update_state()
 
 	def get_latest_snaphost_hash(self):
-		query = sql.SQL("""
-			SELECT {table_vertical}.checksum
-			FROM {schema}.{table_vertical}
-			WHERE {table_vertical}.project = {projectname}
-			ORDER BY {table_vertical}.changed_at DESC
-			LIMIT 1
-		""").format(
-			schema=sql.Identifier(self.parsed_uri.schema), table_vertical=sql.Identifier(TABLE_VERTICAL_SHARE),
-			projectname=sql.Literal(self.parsed_uri.project)
-		)
-
-		rows = list(self.connector.get_query_data(query, False))
-		if len(rows) > 0:
-			return rows[0]["checksum"]
-		else:
-			return None
+		return self.backend.get_latest_snapshot_hash()
 
 	def ensure_history_schema_table(self):
-		if not self.has_schema_tables():
-			print("creating missing table for schema %s" % self.parsed_uri.schema)
-			self.prepare_history_table()
+		self.backend.ensure_history_table()
 
 	def save_project_snapshot(self, changename: str, notes: str):
-		print("checking for schema tables")
 		self.ensure_history_schema_table()
-
-		print("saving data to history table")
-
-		query = sql.SQL("""
-			INSERT INTO {schema}.{table_vertical} (project, metadata, content, changename, changed_by, changed_at, notes, checksum)
-			SELECT
-				{table_qgis}.name,
-				{table_qgis}.metadata,
-				{table_qgis}.content,
-				{changename},
-				{changedby},
-				({table_qgis}.metadata->>'last_modified_time')::TIMESTAMP,
-				{notes},
-				md5({table_qgis}.content)
-			FROM {schema}.{table_qgis}
-			WHERE {table_qgis}.name = {projectname}
-		""").format(
-			schema=sql.Identifier(self.parsed_uri.schema), table_vertical=sql.Identifier(TABLE_VERTICAL_SHARE), table_qgis=sql.Identifier(TABLE_PROJECTS_QGIS),
-			changename=sql.Literal(changename), notes=sql.Literal(notes), changedby=sql.Literal(self.parsed_uri.username),
-			projectname=sql.Literal(self.parsed_uri.project)
-		)
-
-		with closing(self.get_conn()) as conn:
-			with conn:
-				with conn.cursor() as cur:
-					print(query.as_string(cur))
-					cur.execute(query)
-
-					print("data saved")
+		self.backend.save_snapshot(changename, notes)
 
 	def has_schema_tables(self):
-		cols = self.connector.get_table_columns(self.parsed_uri.schema, TABLE_VERTICAL_SHARE)
-		# TODO: make a better check when the creator is stable
-		return len(cols) > 0
+		return self.backend.has_history_table()
 
 	def get_history_data (self):
-		query = sql.SQL("""
-			SELECT
-				changeid,
-				changename,
-				project,
-				metadata,
-				changed_by,
-				changed_at,
-				notes,
-				checksum
-			FROM {schema}.{tablename}
-			WHERE project = {projectid}
-			ORDER BY changed_at DESC
-		""").format(schema=sql.Identifier(self.parsed_uri.schema), tablename=sql.Identifier(TABLE_VERTICAL_SHARE),
-					projectid=sql.Literal(self.parsed_uri.project))
-		return list(self.connector.get_query_data(query, False))
-
-	def prepare_history_table (self):
-
-		query = sql.SQL("""CREATE TABLE IF NOT EXISTS {schema}.{tablename} (
-			changeid			VARCHAR PRIMARY KEY DEFAULT gen_random_uuid(),
-			changename			VARCHAR,
-			project				VARCHAR NOT NULL,
-			content				BYTEA NOT NULL,
-			metadata			JSONB,
-			changed_by			VARCHAR,
-			changed_at			TIMESTAMP DEFAULT now(),
-			notes				VARCHAR,
-			checksum			VARCHAR
-		)""").format(schema=sql.Identifier(self.parsed_uri.schema), tablename=sql.Identifier(TABLE_VERTICAL_SHARE))
-
-		with closing(self.get_conn()) as conn:
-			with conn:
-				with conn.cursor() as cur:
-					cur.execute(query)
+		return self.backend.get_history()
 
 	def get_change_data_raw(self, changeid: str):
-		query = sql.SQL("""
-			SELECT
-				content,
-				checksum
-			FROM {schema}.{tablename}
-			WHERE
-				project = {projectid} AND
-				changeid = {changeid}
-			ORDER BY changed_at DESC
-		""").format(schema=sql.Identifier(self.parsed_uri.schema), tablename=sql.Identifier(TABLE_VERTICAL_SHARE),
-					projectid=sql.Literal(self.parsed_uri.project), changeid=sql.Literal(changeid))
-		return list(self.connector.get_query_data(query, False))[0]
-
+		return self.backend.get_change_raw(changeid)
 
 	def delete_change(self, changeid: str):
+		self.backend.delete_change(changeid)
 
-		query = sql.SQL("""
-			DELETE FROM {schema}.{tablename}
-			WHERE
-				project={projectid} AND changeid={changeid}
-		""").format(
-			schema=sql.Identifier(self.parsed_uri.schema), tablename=sql.Identifier(TABLE_VERTICAL_SHARE),
-			projectid=sql.Literal(self.parsed_uri.project), changeid=sql.Literal(changeid)
-		)
+	def promote_snapshot (self, changeid: str):
+		self.backend.promote(changeid)
 
-		with closing(self.get_conn()) as conn:
-			with conn:
-				with conn.cursor() as cur:
-					cur.execute(query)
+	# --- background polling ------------------------------------------------ #
 
 	def on_project_polled (self, ts: float, data: ProjectUpdateState):
 		print("project polled at ", ts, data)
@@ -217,7 +113,6 @@ class VerticalShareSnapper:
 
 		if self.watcher_thread is not None:
 			print("quitting signal thread")
-			# self.signal_thread.finished.emit()
 			self.watcher_thread.quit()
 			self.watcher_thread.wait()
 			self.watcher_thread = None
@@ -229,28 +124,6 @@ class VerticalShareSnapper:
 	def poll_once (self):
 		if self.watcher_worker is not None:
 			self.watcher_worker.poll_once()
-
-	def promote_snapshot (self, changeid: str):
-		query = sql.SQL("""
-			UPDATE {schema}.{table_qgis} SET( metadata, content ) = (
-				SELECT
-					{table_vertical}.metadata,
-					{table_vertical}.content
-				FROM {schema}.{table_vertical}
-				WHERE project={projectid} AND changeid={changeid}
-			) WHERE name={projectid}
-		""").format(
-			schema=sql.Identifier(self.parsed_uri.schema), table_vertical=sql.Identifier(TABLE_VERTICAL_SHARE), table_qgis=sql.Identifier(TABLE_PROJECTS_QGIS),
-			changeid=sql.Literal(changeid), projectid=sql.Literal(self.parsed_uri.project)
-		)
-
-		with closing(self.get_conn()) as conn:
-			with conn:
-				with conn.cursor() as cur:
-					print(query.as_string(cur))
-					cur.execute(query)
-
-					print("data saved")
 
 
 class ProjectStatePollerWorker (QObject):
