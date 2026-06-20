@@ -234,6 +234,16 @@ def _parse_dt(value) -> Optional[datetime.datetime]:
 	return None
 
 
+def _as_local(dt: Optional[datetime.datetime]) -> Optional[datetime.datetime]:
+	"""GeoPackage stores last_modified_time as a timezone-naive LOCAL value
+	(unlike PostgreSQL, whose timestamps reach us as UTC). Tag naive datetimes
+	with the local timezone so the shared to_local_time() helper (which only
+	assumes UTC for *naive* values) does not shift them by the UTC offset."""
+	if dt is None or dt.tzinfo is not None:
+		return dt
+	return dt.astimezone()
+
+
 class GeoPackageBackend(ProjectBackend):
 
 	# QGIS stores projects in a `qgis_projects` table inside the .gpkg, with
@@ -295,9 +305,9 @@ class GeoPackageBackend(ProjectBackend):
 	def _meta_time(self, meta: dict):
 		dt = _parse_dt(meta.get("last_modified_time"))
 		if dt is not None:
-			return dt
-		try:  # fall back to the file modification time (UTC, to match the rest)
-			return datetime.datetime.utcfromtimestamp(os.path.getmtime(self.path))
+			return _as_local(dt)
+		try:  # fall back to the file modification time (local, like QGIS' metadata)
+			return datetime.datetime.fromtimestamp(os.path.getmtime(self.path)).astimezone()
 		except OSError:
 			return None
 
@@ -340,7 +350,7 @@ class GeoPackageBackend(ProjectBackend):
 					(
 						str(uuid.uuid4()), changename, self.project, content, metadata,
 						meta.get("last_modified_user") or self.username,
-						meta.get("last_modified_time") or datetime.datetime.utcnow().isoformat(sep=" "),
+						meta.get("last_modified_time") or datetime.datetime.now().isoformat(sep=" "),
 						notes,
 						hashlib.md5(_as_bytes(content)).hexdigest() if content is not None else None,
 					))
@@ -356,7 +366,7 @@ class GeoPackageBackend(ProjectBackend):
 			for r in cur.fetchall():
 				item = dict(zip(cols, r))
 				item["metadata"] = _load_json(item.get("metadata"))
-				item["changed_at"] = _parse_dt(item.get("changed_at"))
+				item["changed_at"] = _as_local(_parse_dt(item.get("changed_at")))
 				items.append(item)
 			return items
 
