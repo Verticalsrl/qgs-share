@@ -594,6 +594,22 @@ class PluginRunner (SnapShooterListener):
 		if self.snapper is not None:
 			self.snapper.end_watch()
 
+		# QgsProject is a singleton that outlives the plugin: disconnect our slots
+		# so a stale old instance does not fire on already-deleted toolbar widgets
+		# (e.g. "wrapped C/C++ object of type QPushButton has been deleted") after
+		# a plugin reload/upgrade.
+		project = QgsProject.instance()
+		for signal, slot in (
+			(project.readProject, self.on_project_load),
+			(project.projectSaved, self.on_project_save),
+			(project.cleared, self.on_project_closed),
+			(project.dirtySet, self.on_project_changing),
+		):
+			try:
+				signal.disconnect(slot)
+			except (TypeError, RuntimeError):
+				pass
+
 		try:
 			self.toolbar.deleteLater()
 			# self.iface.removePluginMenu(self.menuId, self.action_disable_versioning)
