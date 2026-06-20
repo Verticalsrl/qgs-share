@@ -198,6 +198,20 @@ class PostgresBackend(ProjectBackend):
 # GeoPackage (SQLite)
 # --------------------------------------------------------------------------- #
 
+def _as_bytes(value):
+	"""content may come back from SQLite as bytes OR str (depending on the column
+	affinity QGIS used): normalise to bytes for hashing / writing to disk."""
+	if value is None:
+		return None
+	if isinstance(value, bytes):
+		return value
+	if isinstance(value, memoryview):
+		return value.tobytes()
+	if isinstance(value, str):
+		return value.encode("utf-8")
+	return bytes(value)
+
+
 def _load_json(value) -> dict:
 	if not value:
 		return {}
@@ -273,7 +287,7 @@ class GeoPackageBackend(ProjectBackend):
 		content, metadata = row[0], row[1]
 		meta = _load_json(metadata)
 		return ProjectUpdateState(
-			content_hash=hashlib.md5(bytes(content)).hexdigest() if content is not None else None,
+			content_hash=hashlib.md5(_as_bytes(content)).hexdigest() if content is not None else None,
 			last_updated=self._meta_time(meta),
 			last_author=meta.get("last_modified_user") or self.username,
 		)
@@ -328,7 +342,7 @@ class GeoPackageBackend(ProjectBackend):
 						meta.get("last_modified_user") or self.username,
 						meta.get("last_modified_time") or datetime.datetime.utcnow().isoformat(sep=" "),
 						notes,
-						hashlib.md5(bytes(content)).hexdigest() if content is not None else None,
+						hashlib.md5(_as_bytes(content)).hexdigest() if content is not None else None,
 					))
 
 	def get_history(self):
@@ -351,7 +365,7 @@ class GeoPackageBackend(ProjectBackend):
 			row = conn.execute(
 				"SELECT content, checksum FROM %s WHERE project=? AND changeid=?" % self.TABLE_HIST,
 				(self.project, changeid)).fetchone()
-		return {"content": row[0], "checksum": row[1]}
+		return {"content": _as_bytes(row[0]), "checksum": row[1]}
 
 	def delete_change(self, changeid: str):
 		with closing(self._conn()) as conn:
