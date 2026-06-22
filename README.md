@@ -1,7 +1,9 @@
-# Vertical Project Share
+# SPQ - Share Project
 
-QGIS plugin to **version and share** QGIS projects stored in **PostgreSQL** or in a
-**GeoPackage**.
+QGIS plugin to **version and share the QGIS project itself** (not the layer data)
+when stored in **PostgreSQL** or in a **GeoPackage**.
+
+> SPQ = *Share Project for QGIS*. By Vertical Srl.
 
 When a project is saved in QGIS' native PostgreSQL or GeoPackage project storage
 (the `qgis_projects` table), several people can work on it. This plugin adds a

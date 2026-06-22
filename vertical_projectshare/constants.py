@@ -27,10 +27,10 @@ def to_local_time(dt: "datetime.datetime"):
 
 
 # for logging
-PLUGIN_ID= "VerticalProjectShare"
+PLUGIN_ID= "SPQ"
 
 # for window title, both should be synced with metadata.txt
-PLUGIN_TITLE= "Vertical Project Share"
+PLUGIN_TITLE= "SPQ - Share Project"
 
 with open(os.path.join(PATH_SCRIPTS, "release.version")) as fp:
 	try:
@@ -42,7 +42,7 @@ TABLE_VERTICAL_SHARE = "qgis_projects_share_history"
 TABLE_PROJECTS_QGIS = "qgis_projects"
 
 VERTICAL_STORAGETYPE="verticalDbShare"
-VERTICAL_STORAGENAME="Vertical Project Share"
+VERTICAL_STORAGENAME="SPQ - Share Project"
 
 VERTICAL_STORAGEPREFIX="verticalshare://"
 

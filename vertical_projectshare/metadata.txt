@@ -5,12 +5,12 @@
 
 ; MANDATORY VALUES
 
-name=Vertical Project Share
+name=SPQ - Share Project
 qgisMinimumVersion=3.22
 qgisMaximumVersion=4.99
-description=Version and share QGIS projects stored in PostgreSQL or GeoPackage.
-about=Vertical Project Share adds a version history on top of QGIS projects stored natively in PostgreSQL (the qgis_projects table) or in a GeoPackage. While versioning is on, every save records a snapshot (project content, author, time, optional notes) in a history table, so several people can work on the same shared project without silently overwriting each other. From the history you can promote a previous version to the working copy, download it as a .qgz, or delete it. A notification bell warns you when a newer version exists in the storage. The plugin is active only for projects stored in PostgreSQL or GeoPackage. PostgreSQL access requires the psycopg2 Python module. Compatible with QGIS 3 (Qt5) and QGIS 4 (Qt6).
-version=1.0.5
+description=SPQ versions and shares the QGIS project itself (not the layer data) when stored in PostgreSQL or GeoPackage.
+about=SPQ (Share Project for QGIS) adds a version history on top of the QGIS project itself - the project stored natively in PostgreSQL (the qgis_projects table) or in a GeoPackage. Unlike data-versioning tools, SPQ versions the project document, not the layer features. While versioning is on, every save records a snapshot (project content, author, time, optional notes) in a history table, so several people can work on the same shared project without silently overwriting each other. From the history you can promote a previous version to the working copy, download it as a .qgz, or delete it. A notification bell warns you when a newer version exists in the storage. The plugin is active only for projects stored in PostgreSQL or GeoPackage. PostgreSQL access requires the psycopg2 Python module. Compatible with QGIS 3 (Qt5) and QGIS 4 (Qt6).
+version=1.0.6
 repository=https://github.com/Verticalsrl/qgs-share
 tracker=https://github.com/Verticalsrl/qgs-share/issues
 homepage=https://vertical-srl.it

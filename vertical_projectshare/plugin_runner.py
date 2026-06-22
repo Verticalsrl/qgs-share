@@ -39,7 +39,7 @@ class PluginRunner (SnapShooterListener):
 		self.iface: QgisInterface = iface
 		self.plugin_dir = os.path.dirname(__file__)
 
-		self.menuId = "Vertical Project Share"
+		self.menuId = PLUGIN_TITLE
 
 		# self.action_enable_versioning = QAction("enable versioning")
 		# self.action_enable_versioning.triggered.connect(self.enable_project_versioning)
